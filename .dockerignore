@@ -1,0 +1,11 @@
+# La imagen solo copia requirements.txt y main.py. Esto mantiene el contexto de build
+# pequeño y garantiza que los secretos nunca lleguen al build.
+.env
+.env.*
+.git
+**/__pycache__
+*.py[cod]
+.venv
+venv
+.ruff_cache
+.pytest_cache

@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+langgraph
+langchain
+langchain-openai
+pydantic
+langchain-groq
+langchain-huggingface
+faiss-cpu
+beautifulsoup4
+sentence-transformers
+langchain-community
+langchain-text-splitters

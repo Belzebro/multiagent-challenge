@@ -1,0 +1,10 @@
+# Secretos
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ruff_cache/
+.pytest_cache/

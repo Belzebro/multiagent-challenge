@@ -1,0 +1,11 @@
+services:
+  api:
+    build: .
+    image: getnet-multiagent-api
+    ports:
+      - "8000:8000"
+    environment:
+      # Compose lee estos valores del archivo .env del proyecto (o del entorno del shell).
+      GROQ_API_KEY: "${GROQ_API_KEY:?Falta GROQ_API_KEY. Copia .env.example a .env y rellénala}"
+      GROQ_MODEL: "${GROQ_MODEL:-openai/gpt-oss-120b}"
+    restart: unless-stopped
