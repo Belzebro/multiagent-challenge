@@ -1,6 +1,6 @@
 # Plan técnico: remediación V4
 
-Estado: **borrador pendiente de aprobación** ([Q-010](preguntas.md#q-010)). Implementa la [especificación](especificacion.md) y respeta la [constitución](constitucion.md).
+Estado: **aprobado el 2026-11-13**, con el ajuste de alcance de [DEC-018](decisiones.md#dec-018) (prueba técnica con entrega hoy). Implementa la [especificación](especificacion.md) y respeta la [constitución](constitucion.md).
 
 ## 1. Arquitectura objetivo
 
@@ -15,44 +15,51 @@ flowchart LR
     K <--> KT[search_getnet_knowledge]
     KT --> IDX[(FAISS en memoria<br/>snapshot del corpus)]
     S <--> ST[tools de soporte<br/>user_id inyectado]
-    ST -. interrupt .-> DB[(Postgres<br/>checkpoints y tickets)]
+    ST -. interrupt .-> DB[(SQLite en un volumen<br/>checkpoints y tickets)]
     API <--> DB
-    K -.-> SV[supervisor F8]
-    S -.-> SV
 ```
 
-Las líneas discontinuas corresponden a fases B y C. El contrato del enunciado (router → `next_node` → `add_conditional_edges`) no cambia.
+La línea discontinua es la pausa del HITL. El contrato del enunciado (router → `next_node` → `add_conditional_edges`) no cambia. El supervisor de colaboración (F8) queda para la siguiente iteración.
 
 ## 2. Fases
 
-| Fase | Contenido | Requisitos | Prio | Depende de | Tamaño |
-|---|---|---|---|---|---|
-| F0 | Specs, tag de lo evaluado, lockfile, plantilla de PR, Docker local | EVID-03 | A | — | S |
-| F1 | Tests versionados y CI | EVID-01, EVID-02 | A | F0 | S |
-| F2 | Identidad: JWT, `user_id == sub`, `InjectedState`, logs, rate limit | SEC-01 a SEC-05, OBS-01 | A | F1 | S–M |
-| F3 | Evaluaciones y corpus ampliado con procedencia | EVID-04 a EVID-08, RAG-01 a RAG-04 | A | F1 | M |
-| F4 | Memoria con propietario | MEM-01 a MEM-05 | B | F2 | M |
-| F5 | HITL con tickets y operador | HITL-01 a HITL-04, SEC-06 | B | F4 | M |
-| F6 | Observabilidad: tokens, coste, latencia y salud | OBS-02 a OBS-04 | C | F1 | S |
-| F7 | RAG v2: búsqueda híbrida y umbral | RAG-05, RAG-06 | C | F3 | M |
-| F8 | Colaboración y replanificación | ORQ-01 a ORQ-03 | C | F3 | M–L |
-| F9 | Cierre: README, informes finales y tag | Todos | A | — | S, continuo |
+Orden de ejecución ([DEC-020](decisiones.md#dec-020)):
 
-Por qué este orden ([DEC-013](decisiones.md#dec-013)): F1 protege todo lo que viene después; F2 es requisito de F4 y F5 ([DEC-006](decisiones.md#dec-006)); F3 fija la línea base que necesitan F7 y F8; F4 y F5 cubren los criterios con más puntos en juego (memoria y HITL).
+| Orden | Fase | Contenido | Requisitos | Prio | Tamaño |
+|---|---|---|---|---|---|
+| 1 | F0 + F1 | Specs, tag de lo evaluado, lockfile, Docker local, tests versionados y CI | EVID-01 a EVID-03 | A | S |
+| 2 | F2 | Identidad: JWT, `user_id == sub`, `InjectedState`, `request_id` y logs seudonimizados | SEC-01 a SEC-04, OBS-01 | A | S |
+| 3 | F4 + F5 | Memoria con propietario y HITL con tickets y operador (bloque todo o nada) | MEM-01 a MEM-05, HITL-01 a HITL-04, SEC-06 | B | M |
+| 4 | F3 | Corpus ampliado con procedencia y evaluaciones de recuperación y routing (y de respuestas si cabe) | RAG-01 a RAG-04, EVID-04 a EVID-08 | A | M |
+| 5 | F9 | README con tabla de evidencias, specs al día y tag | Todos | A | S |
+| 6 | F6 | Tokens, coste y `/health/ready`, solo si sobra tiempo | OBS-02, OBS-04 | C | S |
+| — | F7, F8 | Búsqueda híbrida, umbral y colaboración: siguiente iteración | RAG-05, RAG-06, ORQ | Fuera | — |
+
+Por qué este orden: F1 protege todo lo demás; F2 es requisito de F4 y F5 ([DEC-006](decisiones.md#dec-006)); F4 y F5 forman el bloque con más puntos en juego y no se pueden entregar a medias, así que van mientras hay margen; F3 se puede entregar por partes, así que cierra.
 
 ## 3. Línea de corte para hoy
 
-La hora límite está pendiente ([Q-006](preguntas.md#q-006)). Reglas:
+Entrega preferida antes de las 18:00 (CST), con margen hasta las 19:00 ([Q-006](preguntas.md#q-006)). El trabajo empieza a las 15:50.
 
-1. No se empieza una fase si no cabe completa antes de la hora límite menos 1 h.
-2. La última hora es para F9, y `main` se congela 15 min antes de la hora límite.
-3. F4 y F5 entran juntas o no entran (principio 4 de la [constitución](constitucion.md)).
+| Hasta | Hito |
+|---|---|
+| 16:35 | F0 + F1 integrados en `main` |
+| 17:00 | F2 integrado |
+| 17:50 | F4 + F5 integrados |
+| 18:35 | F3 integrado |
+| 18:50 | F9: README, specs y tag; `main` congelado |
+
+Reglas:
+
+1. `main` es entregable después de cada merge: si a las 18:00 conviene enviar, se envía lo integrado.
+2. F4 y F5 entran juntas o no entran (principio 4 de la [constitución](constitucion.md)). Si a las 17:50 no están en verde, se aparcan y se pasa a F3.
+3. Si falta tiempo, F3 se recorta en este orden: primero la evaluación de respuestas y después la de routing. El corpus y la evaluación de recuperación no se recortan.
 4. Lo que no entre pasa a la tercera oportunidad, en el mismo orden.
 
 ## 4. Flujo de trabajo en git
 
 - Una rama por fase (`f1-tests-ci`, `f2-identidad`…) y un PR que cita requisitos, evidencia y decisiones.
-- CI en verde → squash merge a `main` (pendiente de [Q-007](preguntas.md#q-007)).
+- CI en verde → squash merge a `main` hecho por Claude ([DEC-021](decisiones.md#dec-021)).
 - Tag `v4-evaluated` en `1119c8b` (lo evaluado) y `v5-reevaluacion` al cerrar.
 - Cada PR marca sus tareas en [tareas.md](tareas.md) con el enlace a la evidencia.
 
@@ -63,15 +70,14 @@ La hora límite está pendiente ([Q-006](preguntas.md#q-006)). Reglas:
 - La prueba e2e offline existente (17 comprobaciones) pasa a `tests/`. Solo se sustituye el cliente HTTP de Groq; FastAPI, LangGraph, tools y RAG son reales.
 - `tests/conftest.py` con las fixtures `fake_groq` (respuestas guionizadas), `client` (ASGI) y `offline_corpus` (HTML local).
 - `.github/workflows/ci.yml`: job `test` (Python 3.11, ruff, pytest y evaluación de recuperación) y job `docker` (build con caché, arranque con clave ficticia, espera a *healthy* y smoke de `/chat`).
-- Refactor a `app/` con `main.py` como punto de entrada ([DEC-017](decisiones.md#dec-017)), sin cambios de comportamiento.
+- Sin refactor: `main.py` sigue siendo el módulo principal ([DEC-018](decisiones.md#dec-018)).
 
 ### F2: identidad
 
 - PyJWT con HS256 y `JWT_SECRET` (≥ 32 bytes); `iss`, `aud` y `exp` obligatorios; `scripts/issue_token.py` para desarrollo ([DEC-015](decisiones.md#dec-015)).
 - Dependencia `get_principal()` → `Principal(sub, role)`. `/chat` exige rol `merchant` y `user_id == sub`; el estado del grafo recibe `sub`.
 - Tools de soporte con `InjectedState` y `ToolNode` en lugar del nodo propio ([DEC-007](decisiones.md#dec-007)).
-- Middleware de `request_id`, seudónimo HMAC de `sub` en logs y enmascarado de PAN (algoritmo de Luhn).
-- Rate limit en memoria por `sub` (ventana deslizante) → 429.
+- Middleware de `request_id` y seudónimo HMAC de `sub` en los logs.
 
 ### F3: evaluaciones y corpus
 
@@ -84,32 +90,32 @@ La hora límite está pendiente ([Q-006](preguntas.md#q-006)). Reglas:
 
 ### F4: memoria
 
-- `AsyncPostgresSaver` si hay `DATABASE_URL`; `InMemorySaver` en tests ([DEC-014](decisiones.md#dec-014)).
+- `AsyncSqliteSaver` sobre `STATE_DB` (un archivo en un volumen de Docker); `:memory:` en tests ([DEC-019](decisiones.md#dec-019)).
 - `conversation_id` = UUID4 generado por el servidor = `thread_id`. El estado del hilo guarda el `sub` del dueño; si no coincide → 404.
 - `/chat` acepta `conversation_id` opcional y lo devuelve; `GET /conversations/{id}` para el dueño.
-- `trim_messages` limita lo que llega al LLM; el PAN se enmascara antes de persistir.
-- Compose con `postgres` (volumen y healthcheck); la API espera a que esté sano.
+- `trim_messages` limita lo que llega al LLM.
+- Compose monta un volumen para el archivo SQLite, así que la conversación sobrevive a los reinicios.
 
 ### F5: HITL
 
 - Tools nuevas: `request_refund(transaction_id, reason)` y `escalate_to_human(summary)`. Ambas llaman a `interrupt()` antes de cualquier efecto, así que reanudar es idempotente.
-- La API detecta `__interrupt__`, crea el ticket en el store y responde `status: "pending_human"` con `ticket_id`.
+- La API detecta `__interrupt__`, crea el ticket en la tabla `tickets` del mismo SQLite y responde `status: "pending_human"` con `ticket_id`.
 - Operador: `GET /operator/tickets`, `POST /operator/tickets/{id}/claim` y `POST /operator/tickets/{id}/resolve` (`approve`, `reject` o `reply`) → `Command(resume=…)`.
 - Con un ticket abierto, `/chat` sobre esa conversación → 409.
 
-### F6: observabilidad
+### F6: observabilidad (solo si sobra tiempo)
 
 - `UsageMetadataCallbackHandler` por petición → tokens por modelo; coste estimado con una tabla de precios configurable.
 - Tiempos por nodo en logs y en `/metrics` (prometheus-client).
 - `/health/live` y `/health/ready`; el HEALTHCHECK de Docker usa `ready`.
 
-### F7: RAG v2
+### F7: RAG v2 (siguiente iteración)
 
 - BM25 (`rank_bm25`) + FAISS con fusión RRF (k = 60).
 - Umbral elegido con el holdout, que incluye consultas sin respuesta en el corpus; por debajo, el agente dice que no tiene la información.
 - Reranker solo si la evaluación muestra mejora.
 
-### F8: colaboración
+### F8: colaboración (siguiente iteración)
 
 - Tras cada especialista, un `supervisor` (salida estructurada, enum cerrado, fail-closed) decide `knowledge`, `support` o `finish`; contador `hops` en el estado (máximo 3).
 - Si intervinieron dos especialistas, un nodo `synthesizer` compone la respuesta.
@@ -136,7 +142,7 @@ Son estimaciones. Durante la ejecución se ajustan con las cabeceras `x-ratelimi
 | Respuestas: antes y después del corpus | 10 × 2 | 80K | `openai/gpt-oss-120b` |
 | Margen para pruebas manuales | — | 70K | `openai/gpt-oss-120b` |
 | **Total del modelo evaluado** | | **200K** | límite diario |
-| Juez | 20 | 40K | otro modelo, con cuota aparte |
+| Juez | — | — | fuera de hoy ([DEC-018](decisiones.md#dec-018)) |
 
 ## 8. Riesgos (premortem)
 

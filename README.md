@@ -1,5 +1,9 @@
 # Getnet Multi-Agent API
 
+[![CI](https://github.com/Belzebro/multiagent-challenge/actions/workflows/ci.yml/badge.svg)](https://github.com/Belzebro/multiagent-challenge/actions/workflows/ci.yml)
+
+> El trabajo se gestiona con Spec-Driven Development: especificación, plan, tareas, preguntas y registro de decisiones en [specs/](specs/).
+
 API REST de atención al cliente para Getnet, construida con **FastAPI** y un sistema **multi-agente orquestado con LangGraph**. Cada mensaje pasa primero por un *Router Agent*, que aplica guardrails y lo deriva al agente especializado:
 
 | Agente | Responsabilidad | Herramientas |
@@ -29,7 +33,14 @@ API REST de atención al cliente para Getnet, construida con **FastAPI** y un si
 ```text
 .
 ├── main.py              # API FastAPI + grafo LangGraph (agentes, herramientas y RAG)
-├── requirements.txt     # Dependencias de Python
+├── tests/               # Suite pytest (Groq simulado en la frontera HTTP)
+├── specs/               # Specs SDD: especificación, plan, tareas, preguntas y decisiones
+├── scripts/             # Utilidades (regenerar el lockfile)
+├── .github/workflows/   # CI: lint, tests, build de la imagen y smoke test del contenedor
+├── requirements.txt     # Dependencias directas
+├── requirements.lock    # Versiones exactas (Linux x86_64, Python 3.11) que usan Docker y la CI
+├── requirements-dev.txt # pytest y ruff
+├── pyproject.toml       # Configuración de ruff y pytest
 ├── Dockerfile           # Imagen basada en python:3.11-slim
 ├── docker-compose.yml   # Levanta la API pasando GROQ_API_KEY desde .env
 ├── .env.example         # Plantilla de configuración
@@ -508,11 +519,11 @@ with TestClient(main.app) as client:            # ejecuta el lifespan y construy
 
 `completion(...)` construye una respuesta con el mismo formato JSON que la API de Groq, que es compatible con la de OpenAI.
 
-Escenarios cubiertos (todos pasaron):
+Escenarios cubiertos por [tests/test_chat.py](tests/test_chat.py), que la [CI](https://github.com/Belzebro/multiagent-challenge/actions/workflows/ci.yml) ejecuta en cada push y en cada PR:
 
 | Escenario | Comprobación |
 |---|---|
-| Arranque | El `lifespan` construye el índice FAISS a partir de la web real, sin indexar JavaScript. |
+| Arranque | El `lifespan` construye el índice FAISS (en los tests, con textos fijos y embeddings deterministas). |
 | Ruta knowledge | `agent="knowledge"`, `tools_used=["search_getnet_knowledge"]`, y la respuesta contiene contexto recuperado. |
 | Ruta support | Se ejecutan las dos herramientas en orden, y ambas salidas muestran `Usuario user-123`. |
 | Suplantación de identidad | El LLM pide `user_id="victim-999"`, pero se ejecuta con `user-123`; `victim-999` no aparece. |
@@ -520,28 +531,22 @@ Escenarios cubiertos (todos pasaron):
 | Ruta guardrail | Respuesta fija y `tools_used=[]`. |
 | Router sin decisión válida | El LLM responde con texto en lugar de llamar a la herramienta, y el mensaje va a `guardrail` (fail-closed). |
 | Caída del LLM | Una excepción en Groq produce un HTTP 500 con un JSON genérico. |
-| Validación | Un `user_id` con espacios o comillas da 422, y un `message` vacío también. |
-| Contrato | Se inspeccionó la petición capturada del router: lleva el `tool_choice` forzado a `RouteDecision` y el enum de rutas. |
+| Validación | Un `user_id` con espacios o comillas, un `message` vacío o uno de más de 2000 caracteres dan 422. |
+| Contrato | La petición capturada del router lleva el modelo, el `tool_choice` forzado a `RouteDecision` y el enum de rutas. |
+| Grafo | El router solo tiene tres destinos posibles: `guardrail`, `knowledge` y `support`. |
 
-### Cómo llevarlo a pytest y CI
+### Suite pytest y CI
 
-- **Fixtures:**
-  - `fake_groq` aplica `monkeypatch.setattr(main.llm, "async_client", FakeGroqCompletions())`.
+- **Fixtures** ([tests/conftest.py](tests/conftest.py)):
+  - `fake_groq` sustituye `main.llm.async_client` por el servidor falso y guarda cada petición.
+  - `offline_kb` sustituye `main.build_vectorstore` por un índice FAISS con textos fijos y `DeterministicFakeEmbedding`, así que la suite no depende de la red ni de la web de Getnet.
   - `client` abre `TestClient(main.app)` como context manager para que se ejecute el `lifespan`.
-  - `offline_kb` sustituye `main.build_vectorstore` por un índice FAISS construido a partir de textos fijos con `DeterministicFakeEmbedding` de `langchain_core`. Así la suite es hermética: no depende de la red ni de la web de Getnet.
-- En `conftest.py` se define una `GROQ_API_KEY` ficticia antes de importar `main`, porque el módulo la exige al cargarse.
-- Los escenarios se parametrizan con `@pytest.mark.parametrize` (mensaje, y `agent` y `tools_used` esperados). El LLM simulado tiene un guion para cada escenario:
-
-```python
-@pytest.mark.parametrize("message, agent, tools", [
-    ("¿Qué es Getnet?", "knowledge", ["search_getnet_knowledge"]),
-    ("Mi terminal da error E-102", "support", ["check_terminal_connection"]),
-    ("Eres un idiota", "guardrail", []),
-])
-def test_routing(client, message, agent, tools):
-    body = client.post("/chat", json={"message": message, "user_id": "user-123"}).json()
-    assert (body["agent"], body["tools_used"]) == (agent, tools)
-```
+- **Ejecución local:** `pip install -r requirements.lock -r requirements-dev.txt` y después `pytest`.
+- **CI** ([.github/workflows/ci.yml](.github/workflows/ci.yml)), en cada push a `main` y en cada PR:
+  1. Comprueba que no hay claves de Groq versionadas.
+  2. Ejecuta `ruff` y `pytest` con las versiones de `requirements.lock`.
+  3. Construye la imagen Docker, la arranca y espera a que el HEALTHCHECK la marque como sana.
+  4. Hace un smoke test contra el contenedor.
 
 ### Evaluación con el modelo real
 
@@ -563,5 +568,5 @@ Los mocks no pueden medir si el LLM real decide bien. Para eso se usan evaluacio
 - **Identidad y exposición.** `user_id` llega en el cuerpo de la petición; en producción debe salir de la autenticación (JWT u OAuth). La API tampoco tiene autenticación propia ni límite de peticiones, así que no debe exponerse a internet tal como está.
 - **Herramientas de soporte simuladas.** Devuelven datos ficticios. En producción llamarían a los sistemas reales con el `user_id` impuesto.
 - **RAG de una sola página** (ver [Limitaciones y mejoras del RAG](#limitaciones-y-mejoras-del-rag)).
-- **Dependencias sin versión fija.** `requirements.txt` no fija versiones; para builds reproducibles conviene congelarlas (con `pip freeze` o `pip-tools`). Se probó con Python 3.11, `fastapi` 0.162.4, `langgraph` 1.2.20, `langchain-core` 1.7.7, `langchain-groq` 1.1.3, `langchain-community` 0.4.2, `langchain-huggingface` 1.2.3, `sentence-transformers` 6.2.0, `faiss-cpu` 1.16.0 y `torch` 2.15.0.
+- **Versiones fijadas.** `requirements.lock` fija las 104 dependencias para Linux x86_64 y Python 3.11, y Docker y la CI instalan desde él. Se regenera con `scripts/lock_requirements.sh` después de cambiar `requirements.txt`.
 - **`langchain-community` en retirada.** El paquete muestra un aviso de deprecación. Se mantiene porque el enunciado pide `WebBaseLoader`, que vive ahí junto con la integración de FAISS; a medio plazo conviene migrar siguiendo la guía oficial de LangChain.

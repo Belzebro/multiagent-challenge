@@ -7,12 +7,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# 1. Dependencias: esta capa se reutiliza mientras requirements.txt no cambie.
-#    torch se instala antes desde el índice CPU de PyTorch para que pip no descargue la build
-#    con CUDA (varios GB) que no hace falta: los embeddings MiniLM se calculan en CPU.
-COPY requirements.txt .
-RUN pip install --index-url https://download.pytorch.org/whl/cpu torch \
- && pip install -r requirements.txt
+# 1. Dependencias con versiones fijadas (requirements.lock): esta capa se reutiliza mientras el lock
+#    no cambie. torch se instala antes desde el índice CPU de PyTorch para que pip no descargue la
+#    build con CUDA (varios GB) que no hace falta: los embeddings MiniLM se calculan en CPU.
+COPY requirements.lock .
+RUN pip install --index-url https://download.pytorch.org/whl/cpu torch==2.15.0 \
+ && pip install -r requirements.lock
 
 # 2. Usuario sin privilegios: la API no se ejecuta como root.
 RUN useradd --create-home --no-log-init --uid 10001 appuser

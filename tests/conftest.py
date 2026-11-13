@@ -1,0 +1,106 @@
+"""Fixtures compartidas.
+
+Solo se sustituye la llamada HTTP a Groq (``main.llm.async_client``). langchain-groq (esquemas de tools,
+``tool_choice`` y parseo de ``tool_calls``), LangGraph, las tools, FastAPI y el lifespan se ejecutan de
+verdad. La base de conocimiento se construye con textos fijos y embeddings deterministas, así que la suite
+no necesita red ni una GROQ_API_KEY real.
+"""
+
+import json
+import os
+
+os.environ.setdefault("GROQ_API_KEY", "test-key-never-sent")
+
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+from langchain_community.vectorstores import FAISS  # noqa: E402
+from langchain_core.documents import Document  # noqa: E402
+from langchain_core.embeddings import DeterministicFakeEmbedding  # noqa: E402
+
+import main  # noqa: E402
+
+KB_DOCS = [
+    Document(page_content="Getnet online payments: accept cards and alternative payment methods online.",
+             metadata={"source": "https://www.getnet.net/en/our-solutions/online-payments"}),
+    Document(page_content="In-person payments with Getnet POS terminals and SmartPOS devices.",
+             metadata={"source": "https://www.getnet.net/en/our-solutions/in-person-payments"}),
+    Document(page_content="Getnet developers portal: APIs and SDKs to integrate payments.",
+             metadata={"source": "https://www.getnet.net/en/developers"}),
+]
+
+
+def completion(content=None, tool_calls=None):
+    """Respuesta con el mismo formato JSON que la API de Groq (compatible con OpenAI)."""
+    msg = {"role": "assistant", "content": content}
+    if tool_calls:
+        msg["tool_calls"] = [
+            {"id": f"call_{i}_{name}", "type": "function",
+             "function": {"name": name, "arguments": json.dumps(args)}}
+            for i, (name, args) in enumerate(tool_calls)
+        ]
+    return {
+        "id": "chatcmpl-fake", "object": "chat.completion", "created": 0, "model": main.GROQ_MODEL,
+        "choices": [{"index": 0, "message": msg, "logprobs": None,
+                     "finish_reason": "tool_calls" if tool_calls else "stop"}],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+    }
+
+
+class FakeGroq:
+    """Imita ``AsyncGroq().chat.completions``: responde según la petición y guarda lo que recibe.
+
+    Sabe qué agente llama por las tools que ofrece la petición, y en qué vuelta del bucle ReAct está por
+    el número de mensajes de tool del historial.
+    """
+
+    def __init__(self):
+        self.requests: list[dict] = []
+
+    async def create(self, **kwargs):
+        self.requests.append(kwargs)
+        msgs = kwargs["messages"]
+        tools = [t["function"]["name"] for t in kwargs.get("tools") or []]
+        user = next(m["content"] for m in reversed(msgs) if m["role"] == "user")
+        n_tool_msgs = sum(m["role"] == "tool" for m in msgs)
+
+        if "UPSTREAM_DOWN" in user:
+            raise RuntimeError("simulated Groq outage")
+        if "RouteDecision" in tools:  # router
+            if "PARSE_FAIL" in user:
+                return completion(content="no estoy seguro")  # sin tool call -> parsed=None
+            low = user.lower()
+            route = ("guardrail" if ("idiota" in low or "ignora tus instrucciones" in low)
+                     else "support" if "terminal" in low else "knowledge")
+            return completion(tool_calls=[("RouteDecision", {"next_node": route, "reason": "test"})])
+        if "search_getnet_knowledge" in tools:  # knowledge
+            if n_tool_msgs == 0:
+                return completion(tool_calls=[("search_getnet_knowledge", {"query": "online payments"})])
+            ctx = [m for m in msgs if m["role"] == "tool"][-1]["content"]
+            return completion(content="KNOWLEDGE<<" + ctx[:160].replace("\n", " ") + ">>")
+        if "check_terminal_connection" in tools:  # support
+            if n_tool_msgs == 0:  # el LLM intenta suplantar a otro usuario
+                return completion(tool_calls=[("check_terminal_connection", {"user_id": "victim-999"})])
+            if n_tool_msgs == 1:  # el LLM omite el argumento
+                return completion(tool_calls=[("check_transaction_status", {})])
+            outs = [m["content"].splitlines()[0] for m in msgs if m["role"] == "tool"]
+            return completion(content="SUPPORT<<" + " || ".join(outs) + ">>")
+        raise AssertionError(f"petición inesperada: tools={tools}")
+
+
+@pytest.fixture
+def fake_groq(monkeypatch):
+    fake = FakeGroq()
+    monkeypatch.setattr(main.llm, "async_client", fake)
+    return fake
+
+
+@pytest.fixture
+def offline_kb(monkeypatch):
+    monkeypatch.setattr(main, "build_vectorstore",
+                        lambda: FAISS.from_documents(KB_DOCS, DeterministicFakeEmbedding(size=384)))
+
+
+@pytest.fixture
+def client(fake_groq, offline_kb):
+    with TestClient(main.app) as test_client:  # ejecuta el lifespan
+        yield test_client

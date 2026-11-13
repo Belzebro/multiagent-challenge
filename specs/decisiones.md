@@ -16,11 +16,16 @@ Registro *append-only*: una decisión no se borra; si cambia, se añade otra que
 | [DEC-010](#dec-010) | 2026-11-13 | Plan gratuito de Groq: CI sin LLM y evaluaciones con presupuesto | Aceptada | Usuario y técnica |
 | [DEC-011](#dec-011) | 2026-11-13 | Juez LLM sin calibración humana, orientativo | Aceptada | Usuario |
 | [DEC-012](#dec-012) | 2026-11-13 | Claude crea ramas, hace push y abre PRs | Aceptada | Usuario |
-| [DEC-013](#dec-013) | 2026-11-13 | Reordenar las fases por la fecha límite | Propuesta | Técnica |
-| [DEC-014](#dec-014) | 2026-11-13 | Postgres para checkpoints y tickets | Propuesta | Técnica |
-| [DEC-015](#dec-015) | 2026-11-13 | JWT HS256 en desarrollo; OIDC con JWKS documentado | Propuesta | Técnica |
-| [DEC-016](#dec-016) | 2026-11-13 | Corpus: páginas EN, solo `<main>`, snapshot | Propuesta | Técnica |
-| [DEC-017](#dec-017) | 2026-11-13 | Paquete `app/` con `main.py` como punto de entrada | Propuesta | Técnica |
+| [DEC-013](#dec-013) | 2026-11-13 | Reordenar las fases por la fecha límite | Reemplazada por DEC-020 | Técnica, aprobada |
+| [DEC-014](#dec-014) | 2026-11-13 | Postgres para checkpoints y tickets | Reemplazada por DEC-019 | Técnica, aprobada |
+| [DEC-015](#dec-015) | 2026-11-13 | JWT HS256 en desarrollo; OIDC con JWKS documentado | Aceptada | Técnica, aprobada |
+| [DEC-016](#dec-016) | 2026-11-13 | Corpus: páginas EN, solo `<main>`, snapshot versionado | Aceptada | Técnica, aprobada |
+| [DEC-017](#dec-017) | 2026-11-13 | Paquete `app/` con `main.py` como punto de entrada | Reemplazada por DEC-018 | Técnica, aprobada |
+| [DEC-018](#dec-018) | 2026-11-13 | Alcance de la entrega de hoy: prueba técnica, no producción | Aceptada | Usuario y técnica |
+| [DEC-019](#dec-019) | 2026-11-13 | SQLite en un volumen en lugar de Postgres | Aceptada | Técnica |
+| [DEC-020](#dec-020) | 2026-11-13 | Orden de ejecución final | Aceptada | Técnica |
+| [DEC-021](#dec-021) | 2026-11-13 | Claude hace squash merge a `main` con la CI en verde | Aceptada | Usuario |
+| [DEC-022](#dec-022) | 2026-11-13 | Docker local con Colima | Aceptada | Usuario |
 
 ---
 
@@ -91,7 +96,7 @@ Registro *append-only*: una decisión no se borra; si cambia, se añade otra que
 
 - Contexto: ≈ 30 RPM, 8K TPM y 200K tokens al día por modelo, según la documentación de Groq (pendiente de confirmar en la página *Limits* de la cuenta).
 - Decisión: la CI no llama a Groq. Las evaluaciones con el modelo real se lanzan a mano, con presupuesto declarado, ritmo según TPM y reintentos que respetan `retry-after`. El juez usa otro modelo: cuota aparte y menos autopreferencia.
-- Consecuencias: datasets live pequeños (≈ 30 casos de routing y 10 de respuestas).
+- Consecuencias: datasets live pequeños (≈ 30 casos de routing y 8 de respuestas). La clave está en un `.env` local ignorado por git ([Q-008](preguntas.md#q-008)).
 
 ### DEC-011
 
@@ -105,11 +110,11 @@ Registro *append-only*: una decisión no se borra; si cambia, se añade otra que
 
 **Claude puede crear ramas, hacer push y abrir PRs en `Belzebro/multiagent-challenge`.**
 
-- Pendiente: el merge a `main` ([Q-007](preguntas.md#q-007)).
+- Ampliada por [DEC-021](#dec-021): también el merge a `main`.
 
 ### DEC-013
 
-Estado: **Propuesta**.
+Estado: **Reemplazada por [DEC-020](#dec-020)** (aprobada en [Q-010](preguntas.md#q-010)).
 
 **Orden de fases: F0 → F1 tests y CI → F2 identidad → F3 evaluaciones y corpus → F4 memoria → F5 HITL → F6 observabilidad → F7 RAG v2 → F8 colaboración, con F9 (cierre) de forma continua.**
 
@@ -119,7 +124,7 @@ Estado: **Propuesta**.
 
 ### DEC-014
 
-Estado: **Propuesta**.
+Estado: **Reemplazada por [DEC-019](#dec-019)** (aprobada en [Q-010](preguntas.md#q-010)).
 
 **Postgres en compose para checkpoints (`AsyncPostgresSaver`) y tickets (`AsyncPostgresStore`); `InMemorySaver` e `InMemoryStore` en tests. La propiedad de la conversación se guarda en el estado del hilo.**
 
@@ -128,7 +133,7 @@ Estado: **Propuesta**.
 
 ### DEC-015
 
-Estado: **Propuesta**.
+Estado: **Aceptada** ([Q-010](preguntas.md#q-010)).
 
 **JWT HS256 firmado con `JWT_SECRET` en desarrollo, con `sub`, `role`, `exp`, `iss` y `aud`; en producción, RS256 con JWKS de un proveedor OIDC (documentado). `user_id` sigue en el body por el enunciado, pero debe coincidir con `sub`.**
 
@@ -136,19 +141,51 @@ Estado: **Propuesta**.
 
 ### DEC-016
 
-Estado: **Propuesta**.
+Estado: **Aceptada** ([Q-010](preguntas.md#q-010)).
 
 **Corpus: las páginas EN del sitemap permitidas por robots.txt (61 el 2026-11-11), solo el contenido de `<main>`, en un snapshot con manifest. El índice se construye desde el snapshot.**
 
 - Contexto: medido el 2026-11-11, entre el 19 % y el 29 % del texto de cada página es menú o pie repetido. La home tiene un único `<main>`.
 - Alternativa descartada: ingesta en vivo en cada arranque (métricas no reproducibles y arranque frágil).
-- Pendiente: si el texto se versiona en el repo ([Q-009](preguntas.md#q-009)).
+- Resuelto en [Q-009](preguntas.md#q-009): el snapshot se versiona en el repo, con la URL y la fecha de cada página.
 
 ### DEC-017
 
-Estado: **Propuesta**.
+Estado: **Reemplazada por [DEC-018](#dec-018)** (aprobada en [Q-010](preguntas.md#q-010)).
 
 **El código pasa a un paquete `app/` (configuración, auth, rag, agentes, grafo y API), y `main.py` queda como punto de entrada (`uvicorn main:app`).**
 
 - Contexto: autenticación, memoria, HITL y observabilidad multiplicarían el tamaño de un `main.py` de unas 330 líneas.
 - Consecuencias: refactor sin cambio de comportamiento, protegido por la suite de F1.
+
+### DEC-018
+
+**Alcance de la entrega de hoy.**
+
+- Contexto: es una prueba técnica para la vacante de AI Deployment Engineer en Getnet, no un producto que vaya a producción. La entrega es hoy, preferiblemente antes de las 18:00 (CST), con margen hasta las 19:00 ([Q-006](preguntas.md#q-006)).
+- Decisión: entran F0, F1, F2, F4, F5, F3 y F9, y F6 solo si sobra tiempo. Quedan para la siguiente iteración F7 (búsqueda híbrida y umbral), F8 (colaboración), el refactor a `app/` ([DEC-017](#dec-017)), el rate limiting, el enmascarado de PAN y el juez LLM.
+- Consecuencias: menos superficie y menos riesgo ante la fecha límite. El README declara lo que queda fuera y por qué.
+
+### DEC-019
+
+**SQLite en lugar de Postgres (reemplaza a [DEC-014](#dec-014)).**
+
+- Decisión: `AsyncSqliteSaver` para los checkpoints y una tabla `tickets` en el mismo archivo, sobre un volumen de Docker; `:memory:` en tests.
+- Alternativa: Postgres, necesario con varias réplicas. El cambio a `AsyncPostgresSaver` queda documentado.
+- Consecuencias: persistencia real entre reinicios sin añadir un servicio a compose.
+
+### DEC-020
+
+**Orden de ejecución (reemplaza a [DEC-013](#dec-013)): F0 y F1 → F2 → F4 y F5 → F3 → F9, y F6 si sobra tiempo.**
+
+- Razón: con F7 y F8 fuera, F3 deja de ser requisito previo. Memoria y HITL forman el bloque con más puntos en juego y no se pueden entregar a medias, así que van mientras hay margen; F3 se puede entregar por partes, así que cierra.
+
+### DEC-021
+
+**Claude hace squash merge a `main` de cada PR con la CI en verde ([Q-007](preguntas.md#q-007)).**
+
+### DEC-022
+
+**Docker local con Colima ([Q-003](preguntas.md#q-003)).**
+
+- Consecuencias: la imagen y compose se prueban en local (arm64) antes de cada push; la CI sigue siendo la evidencia oficial (x86_64).
