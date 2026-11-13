@@ -3,6 +3,7 @@
 | | |
 |---|---|
 | Estado | Aprobada el 2026-11-13, con el ajuste de alcance de [DEC-018](decisiones.md#dec-018) |
+| Implementación | Prioridades A y B completas. De la C, OBS-02 y OBS-04. Lo marcado como «Fuera» queda para la siguiente iteración. Detalle y evidencias en [tareas.md](tareas.md) |
 | Fecha | 2026-11-13 |
 | Contexto | Prueba técnica para la vacante de AI Deployment Engineer en Getnet; no es un producto que vaya a producción |
 | Entradas | Enunciado original · feedback V4 (5.2/10, recibido el 2026-11-11) · premortem del plan |

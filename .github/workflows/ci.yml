@@ -46,6 +46,17 @@ jobs:
       - name: Tests
         run: pytest
 
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/huggingface
+          key: hf-all-MiniLM-L6-v2
+
+      - name: Evaluación de recuperación y release gate
+        run: |
+          python -m evals.run_retrieval --out-dir "$RUNNER_TEMP/evals"
+          python -m evals.gate retrieval="$RUNNER_TEMP/evals/retrieval.json" \
+            routing=evals/reports/routing.json answers=evals/reports/answers.json
+
   docker:
     name: Imagen Docker y smoke test
     runs-on: ubuntu-latest
@@ -80,6 +91,7 @@ jobs:
             curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8000/chat \
               -H 'Content-Type: application/json' -H "$1" -d "$2"
           }
+          curl -fsS http://127.0.0.1:8000/health/ready; echo
           token=$(docker exec api python scripts/issue_token.py --sub ci-user)
           code=$(post "X-No-Auth: 1" '{"message": "hola", "user_id": "ci-user"}')
           echo "sin token -> $code"; test "$code" = "401"

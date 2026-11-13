@@ -26,6 +26,7 @@ Registro *append-only*: una decisión no se borra; si cambia, se añade otra que
 | [DEC-020](#dec-020) | 2026-11-13 | Orden de ejecución final | Aceptada | Técnica |
 | [DEC-021](#dec-021) | 2026-11-13 | Claude hace squash merge a `main` con la CI en verde | Aceptada | Usuario |
 | [DEC-022](#dec-022) | 2026-11-13 | Docker local con Colima | Aceptada | Usuario |
+| [DEC-023](#dec-023) | 2026-11-13 | Correcciones que encontró la evaluación: bucle ReAct acotado, comprobador y router | Aceptada | Técnica, por la evaluación |
 
 ---
 
@@ -189,3 +190,19 @@ Estado: **Reemplazada por [DEC-018](#dec-018)** (aprobada en [Q-010](preguntas.m
 **Docker local con Colima ([Q-003](preguntas.md#q-003)).**
 
 - Consecuencias: la imagen y compose se prueban en local (arm64) antes de cada push; la CI sigue siendo la evidencia oficial (x86_64).
+
+### DEC-023
+
+**Correcciones que encontró la evaluación de respuestas: bucle ReAct acotado, comprobador y router.**
+
+- Primera ejecución ([answers_run1.md](../evals/reports/answers_run1.md)):
+  - Fallo real: un agente que no encontraba un dato buscaba hasta agotar el `recursion_limit` (`GraphRecursionError`, que en la API es un 500).
+  - Fallo de medición: el comprobador no aceptaba el formato de cita de gpt-oss (`【1】`) ni los guiones y espacios Unicode, así que daba por falladas respuestas correctas.
+- Segunda ejecución ([answers_run2.md](../evals/reports/answers_run2.md)), con el tope a 3 herramientas por turno y `tool_choice="none"`:
+  - Groq devuelve 400 (`tool_use_failed`) si el modelo intenta igualmente llamar a una herramienta.
+  - El router bloqueó como `guardrail` una pregunta por el NIF de Getnet, que es un dato público.
+- Decisión:
+  - Tras 3 herramientas en el mismo turno, la respuesta final se pide al LLM sin herramientas, con la pregunta y lo que devolvieron las herramientas como texto.
+  - El comprobador normaliza el texto y acepta el formato de cita de gpt-oss.
+  - El prompt del router aclara que los datos públicos de la propia empresa son `knowledge`.
+- Consecuencias: el agente siempre termina con una respuesta. Las ejecuciones anteriores se conservan como evidencia; la evaluación de routing y la de respuestas se repiten sobre el código corregido.

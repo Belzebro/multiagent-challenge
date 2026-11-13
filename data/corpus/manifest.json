@@ -1,0 +1,443 @@
+{
+  "source": "https://www.getnet.net/sitemap.xml (páginas /en permitidas por robots.txt)",
+  "fetched_at": "2026-11-13T22:16:50+00:00",
+  "loader": "langchain_community WebBaseLoader (scrape_all) + contenido de <main>",
+  "pages": 55,
+  "chars": 307821,
+  "skipped_urls": [
+    "https://www.getnet.net/en/resources/client-stories/connects-elecctro",
+    "https://www.getnet.net/en/resources/client-stories/connects-koin",
+    "https://www.getnet.net/en/resources/client-stories/connects-sep-uruguay",
+    "https://www.getnet.net/en/resources/client-stories/connects-soft-restaurant",
+    "https://www.getnet.net/en/resources/client-stories/partner-aevi",
+    "https://www.getnet.net/en/resources/client-stories/upi"
+  ],
+  "boilerplate_lines_removed": [
+    "A year in review: the key fintech developments that shaped 2024",
+    "Agentic payments: the next frontier in digital commerce",
+    "Back to Blog",
+    "Bruno da Silva Oliveira",
+    "CEO Getnet Argentina",
+    "CEO Getnet Chile",
+    "CEO Getnet Mexico",
+    "CEO of Getnet Europe",
+    "Carlos Nomura",
+    "Celebrating Getnet Argentina’s fourth anniversary",
+    "Chief Sales Officer at Getnet Brazil",
+    "Commercial Planning Director at Getnet Europe",
+    "Daniel Flores",
+    "Darren Bi",
+    "Developers",
+    "Digital Payments",
+    "Director of Commercial Open Market, Getnet Mexico",
+    "Education",
+    "Education in the digital age: the adoption of digital payments",
+    "Encryption vs tokenisation: Which is best for your business?",
+    "Europe",
+    "Fabrice Mendez",
+    "Fernando Benito",
+    "Financial services",
+    "Fintech",
+    "Get code",
+    "Getnet",
+    "Global Head of Corporate Sales PagoNxt Merchant",
+    "Global Head of Data & Agentic Commerce",
+    "Global Head of Product",
+    "Global Products Director at PagoNxt Merchant",
+    "Guido Giudice",
+    "Head Global Accounts",
+    "Head of Corporates at Getnet Europe",
+    "Head of Global Accounts, Asia",
+    "Head of Global Product Management, PagoNxt Merchant",
+    "Head of Global Product at Getnet.",
+    "Head of Partnerships at PagoNxt",
+    "Head of Value Added Services and Products",
+    "Health & Beauty",
+    "Health & Beauty Payments in 2026: Care, Confidence and Performance",
+    "How APAC merchants can crack the LATAM opportunity",
+    "How can merchants prepare for the holiday season?",
+    "How is Mexico harnessing the travel boom?",
+    "How merchants should prepare for the  next generation of shoppers",
+    "How next-gen payments can help merchants meet ESG objectives",
+    "How people prefer to pay in Portugal",
+    "Ignasi Romeu",
+    "In-person Payments",
+    "Instant payments: from local adoption to cross-border growth",
+    "Irving Damian",
+    "Joaquin Olmedo",
+    "Jorge Otamendi",
+    "Juan Anton Arespacochaga",
+    "Latest Posts",
+    "Latin America",
+    "Leo Salovich",
+    "Luciano Decourt Ferrari",
+    "Merchants",
+    "Mexico",
+    "Money 20 20",
+    "Navigating the payment landscape: Top tips for SMEs in choosing the right partner",
+    "Optimising your checkout process",
+    "Pablo Jiménez",
+    "PagoNxt Merchant",
+    "Payment Trends",
+    "Payments Partner",
+    "Payments infrastructure will define performance in the travel sector",
+    "Read more",
+    "Retail",
+    "Ruben Justel",
+    "Security",
+    "Share to",
+    "Spain & Portugal",
+    "Sustainability",
+    "The 2025 payments landscape in Spain and Portugal",
+    "The evolution of lending solutions for SMEs",
+    "The future of cross-border payments in Latin America",
+    "The future of eCommerce: How modern shoppers are changing the way they pay",
+    "The mobile payment revolution in Latin America",
+    "The next storefront is an AI Shopping Agent",
+    "The role payments play in elevating travel and tourism",
+    "Travel",
+    "Travel & Tourism",
+    "Travel and tourism: 2024 payment trends",
+    "Understanding generational shopping preferences.",
+    "What are the most popular payment trends in Mexico?",
+    "What´s next for the Latin America payments ecosystem?",
+    "Why developer collaboration no longer stops at hackathons",
+    "Why embedded finance is  transforming fintech",
+    "Why retailers must treat payments as a core strategy",
+    "e-commerce"
+  ],
+  "corpus_sha256": "66234f143b1515f3d6131396e802fb40d4b357df51ca25588dcb58c25af68a55",
+  "documents": [
+    {
+      "url": "https://www.getnet.net/en",
+      "title": "Getnet - Home",
+      "chars": 3858,
+      "sha256": "fb3e6c49736e3578b417e2671c3af73b598614fb7e9e85ac3d0a77632871ff3c"
+    },
+    {
+      "url": "https://www.getnet.net/en/contact",
+      "title": "Getnet contact",
+      "chars": 843,
+      "sha256": "6387a9805fe5573e5ce8f5df2c4fc67a15fc1a9530a432fb138dfc999d073470"
+    },
+    {
+      "url": "https://www.getnet.net/en/corporate/about-us",
+      "title": "About us",
+      "chars": 2445,
+      "sha256": "f651c1ca195be0ef8dfd1b2f253ed02571cd626f1f27fb0ce7dad204e8970dfb"
+    },
+    {
+      "url": "https://www.getnet.net/en/developers",
+      "title": "Developers Community",
+      "chars": 2129,
+      "sha256": "d72dbe6c7b83000346e919adb4765db6561fd35d53f6204a738fff8056b12d3a"
+    },
+    {
+      "url": "https://www.getnet.net/en/legal/conduct-and-canal-abierto",
+      "title": "Conduct & Canal Abierto",
+      "chars": 1123,
+      "sha256": "813ef02faf3f7fe27e455fcf0cac1f861e460f104d64c70ff8ccd6c6b391d511"
+    },
+    {
+      "url": "https://www.getnet.net/en/legal/cookies",
+      "title": "Getnet - Cookies",
+      "chars": 14919,
+      "sha256": "30a3aaceb41be87f854e87e150f5a55c5106b6a4fcea9d8b9a1ec1fc4c52da88"
+    },
+    {
+      "url": "https://www.getnet.net/en/legal/legal-notice",
+      "title": "Getnet - Legal Notice",
+      "chars": 5548,
+      "sha256": "573aceb857840ed95f5ff8689e4630e8b0a72caae1cbc49afb4dfb5042fae223"
+    },
+    {
+      "url": "https://www.getnet.net/en/legal/privacy-policy",
+      "title": "Getnet - Privacy policy",
+      "chars": 30316,
+      "sha256": "01a13455d6bf55526fafca89b7278115641babaf8b440e2c138174d5166fdcad"
+    },
+    {
+      "url": "https://www.getnet.net/en/legal/relatorio-de-transparencia",
+      "title": "Getent Relatorio de Transparencia",
+      "chars": 555,
+      "sha256": "a37e24888608e84d4e2ea19add61ca029ce7efa4c68e261e920332f0b6ceeebc"
+    },
+    {
+      "url": "https://www.getnet.net/en/our-solutions/agentic-commerce",
+      "title": "Agentic Commerce",
+      "chars": 5169,
+      "sha256": "0e0f62224904f583bcfe7e371d6be02de88f848ab4d706869560221b21691e7e"
+    },
+    {
+      "url": "https://www.getnet.net/en/our-solutions/in-person-payments",
+      "title": "In-person Payments",
+      "chars": 2741,
+      "sha256": "08d5affa1f91594b1c0183e5e3407171a89b1fc9d8293f4b12d3841a146ad8e3"
+    },
+    {
+      "url": "https://www.getnet.net/en/our-solutions/omnichannel",
+      "title": "Getnet - Omnichannel",
+      "chars": 2189,
+      "sha256": "5380a4ee5f69789d129d427ea54c5d36925d12046516c9e165f1efe4adfae6b7"
+    },
+    {
+      "url": "https://www.getnet.net/en/our-solutions/online-payments",
+      "title": "Getnet - Online Payments",
+      "chars": 2370,
+      "sha256": "4507fe8d48bb8d160ce46f746880c94ea4a99620a37b11d0441952757bddce0f"
+    },
+    {
+      "url": "https://www.getnet.net/en/our-solutions/value-added-solutions",
+      "title": "Getnet - Value added services",
+      "chars": 1898,
+      "sha256": "f715b5205be971291ccc89c929c1d74db3a405f9745ad7eb4c6d5e78ee8df83d"
+    },
+    {
+      "url": "https://www.getnet.net/en/partners",
+      "title": "Partners",
+      "chars": 3226,
+      "sha256": "abea06bb6a71653eda80cda0f1a05fd8a68f1d7e2467e383608b3b0f2ec4b9d1"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog",
+      "title": "Getnet - Blog",
+      "chars": 326,
+      "sha256": "ba0e1886eb063c8754d1e1674ca4da90f513cb09f7b0ad207facc6d7a68df5c0"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/4-things-every-merchant-needs-to-know-about-open-banking",
+      "title": "4 things every merchant needs to know  about Open Banking",
+      "chars": 3706,
+      "sha256": "e94cfb7a21a30de10b6264fcbfe810a3a69fe55f42d9bf379ae5a98228462c35"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/agentic-payments",
+      "title": "Agentic payments: the next frontier in digital commerce",
+      "chars": 8107,
+      "sha256": "86370e3ad9b793178cb37d63da29361c435e37747e6cd53fd1d99c3323f8cc13"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/celebrating-getnet-argentina-fourth-anniversary",
+      "title": "Celebrating Getnet Argentina’s fourth anniversary",
+      "chars": 5979,
+      "sha256": "90035f34f3d03dc14b33df74a4036e888058a37adb9d3458c1ffd7f5033cba4e"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/education-in-the-digital-age-the-adoption-of-digital-payments",
+      "title": "Education in the digital age: the adoption of digital payments",
+      "chars": 6498,
+      "sha256": "d6023d015cc5b119529e4cb904b05b983001efd807aa271000f98571e1cde380"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/encryption-vs-tokenisation",
+      "title": "Encryption vs tokenisation: Which is best for your business?",
+      "chars": 7294,
+      "sha256": "9c9377bc54a1ce1c252f80794c6da50fd5b1d16e46dc3204ef94ca2df86d244f"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/evolution-of-lending-solution",
+      "title": "The evolution of lending solutions for SMEs",
+      "chars": 9257,
+      "sha256": "90b4dac3bb5d0365724021197d63e34f3cad32b665bae617928a75a6ba271551"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/health-beauty-payments-in-2026",
+      "title": "Health & Beauty Payments in 2026: Care, Confidence and Performance",
+      "chars": 7315,
+      "sha256": "e9f05b25ddc46250f0ae4552de22a57e9b5d4f405466befca8da6f5a9986779e"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/how-merchants-should-prepare-for-the-next-generation-of-shoppers",
+      "title": "How merchants should prepare for the  next generation of shoppers",
+      "chars": 6020,
+      "sha256": "1f94506948e03066a09ac000d538674081a470e816b871e96cda465a85b9247f"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/how-people-prefer-to-pay-in-portugal",
+      "title": "How people prefer to pay in Portugal",
+      "chars": 5791,
+      "sha256": "f7c73f154203b8443e9d0307946a8a75c9494c8a3d4a67de3ae1ba1b68c0e9cd"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/mexican-travel-industry",
+      "title": "How is Mexico harnessing the travel boom?",
+      "chars": 5899,
+      "sha256": "b78f9dabdb8c67f56ae2ac19aac1ed326c85e3e4c26dad9da796ee4df61d4fcb"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/optimising-your-checkout-process",
+      "title": "Optimising your checkout process",
+      "chars": 6507,
+      "sha256": "492a0eac55eeac6045d09b4d56d70f3855808a7ea7c3705826985c019c639014"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/payment-trends-in-mexico",
+      "title": "What are the most popular payment trends in Mexico?",
+      "chars": 5434,
+      "sha256": "871ea255aa44e38d0fa7d63088053da9b0b5357ce6462d6c9bc15ab7a519a9eb"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/payments-infrastructure-will-define-performance-in-the-travel-sector",
+      "title": "Payments infrastructure will define performance in the travel sector",
+      "chars": 6424,
+      "sha256": "1d1db4dc92c41a5e20dfca4728c45f4a06c8802d7da31f52aab0fb9c03885ce9"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/retail",
+      "title": "How can merchants prepare for the holiday season?",
+      "chars": 5414,
+      "sha256": "2870fe9d42d8779ad59e68266f38b5c5ce1ab172259ae0e8c6029942aaeee043"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/the-2025-payments-landscape-in-spain-and-portugal",
+      "title": "The 2025 payments landscape in Spain and Portugal",
+      "chars": 7308,
+      "sha256": "5ad02700b63751c2a880bf41d9d0cbaf0fc86685bbe218f1fc0cf19de4330a0d"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/the-future-of-cross-border-payments-in-latin-america",
+      "title": "The future of cross-border payments in Latin America",
+      "chars": 5562,
+      "sha256": "0af1cefa7c762748679882a2f15f05c0dc50978805acb989b07d5e8bf79d04b8"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/the-future-of-digital-payments-in-the-public-transport-industry",
+      "title": "The future of digital payments in the  public transport industry.",
+      "chars": 9326,
+      "sha256": "0adbc2d9bab2c565d72371a9bae3986a633cd949ba3c9b91d35a4bb0dc38292f"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/the-future-of-ecommerce",
+      "title": "The future of eCommerce: How modern shoppers are changing the way they pay",
+      "chars": 9780,
+      "sha256": "ac5ab7d5ece6a745bb696eb5047182fb18294adaf9eae9a793888af416a8ed7a"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/the-key-fintech-developments-that-shaped-2024",
+      "title": "A year in review: the key fintech developments that shaped 2024",
+      "chars": 7108,
+      "sha256": "ef63dd6a0147628664bb97e81dfd6672beff57d5c9cf86f7f9a8839284469db4"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/the-mobile-payment-revolution-in-latin-america",
+      "title": "The mobile payment revolution in Latin America",
+      "chars": 8617,
+      "sha256": "41a929eda7e7d66ac2f33b85773608162fc8f22b3cafc187d94c8bb40739b045"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/the-role-payments-play-in-elevating-travel-and-tourism",
+      "title": "The role payments play in elevating travel and tourism",
+      "chars": 7166,
+      "sha256": "4ec77d0ef43b2936bbb6f50c3e868c0e5143a2a255c3cadcaf2d96a8a5b5e57b"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/this-is-how-next-gen-payments-can-help-merchants-meet-esg-objectives",
+      "title": "How next-gen payments can help merchants meet ESG objectives",
+      "chars": 4376,
+      "sha256": "cd17481f5e72d6d2d5ea7c488f5879fa6f28f67f6f78edaeb8cac3e5638f8a80"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/top-tips-to-choose-the-right-payments-partner",
+      "title": "Navigating the payment landscape: Top tips for SMEs in choosing the right partner",
+      "chars": 4721,
+      "sha256": "bec947576d0f098efc215bc8ce2c178c357904682181cbd09b345f77f3afffd2"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/travel-and-tourism",
+      "title": "Travel and tourism: 2024 payment trends",
+      "chars": 5214,
+      "sha256": "7ebcfe665c22d3647bf0e7382389b23e14e4de7d8896432345e3405ed0343a10"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/understanding-generational-shopping-preferences",
+      "title": "Understanding generational shopping preferences.",
+      "chars": 5869,
+      "sha256": "3cbbcb8f5d08d914ca0e6b8b3f09753b3e2bccddb954c07d7a96f7039f0029a9"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/what-do-new-payment-regulations-mean-for-merchants",
+      "title": "What do new payment regulations  mean for merchants?",
+      "chars": 3625,
+      "sha256": "fd9bc2cd83f443434beecc97b643d2db26644ef5c8341f549b6a91a389815733"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/what-is-next-for-the-latin-america-payments-ecosystem",
+      "title": "What´s next for the Latin America payments ecosystem?",
+      "chars": 4914,
+      "sha256": "156d1e1656e23d5780375f6bef33014bd837325baaeb5d4de0c8f68306d770f4"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/why-developer-collaboration-no-longer-stops-at-hackathons",
+      "title": "Why developer collaboration no longer stops at hackathons",
+      "chars": 5210,
+      "sha256": "34abd4163929988a37c5f90868e027030011892e13eefcfaa7177406ff7d2bbc"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/why-embedded-finance-is-transforming-fintech",
+      "title": "Why embedded finance is  transforming fintech",
+      "chars": 5546,
+      "sha256": "52c158a9a53190d2ef46923d794615b82d4dd671f8b01384f895a2e81240af29"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/blog/why-retailers-must-treat-payments-as-a-core-strategy",
+      "title": "Why retailers must treat payments as a core strategy",
+      "chars": 8439,
+      "sha256": "5660171d041d510f706d4682416b8a1581c2e1565d5f570f8c607fe48c373ffc"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/client-stories",
+      "title": "Getnet - Client Stories",
+      "chars": 1385,
+      "sha256": "11786bf9a4f9851a24ccb90c8d92833d409daaf132313b22db7683527ad540b6"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/client-stories/bizum",
+      "title": "Getnet is promoting the arrival of Bizum at physical point-of-sale (POS) terminals",
+      "chars": 4340,
+      "sha256": "f86c88ab95dbcf99a779982748911d45b0d3a0e4db2164dc2518d4e512eada96"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/client-stories/connects-melia",
+      "title": "Meliá Hotels International and Getnet are pioneers in payment security in Latin America, offering P2PE solutions.",
+      "chars": 4071,
+      "sha256": "9b26838e19c7bf7c8300b0829818e03c80245972f718213ae1d46c0465be48c7"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/client-stories/connects-pascual",
+      "title": "Getnet transforms Grupo Pascual’s delivery mobiles into full POS terminals",
+      "chars": 3097,
+      "sha256": "e0700e573c58f921621bd6d65c5749759cc07a7cecafd5702f758cd7f1f1deca"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/client-stories/zig",
+      "title": "How Getnet and Zig are transforming stadium payments at UD Almería (Spain)",
+      "chars": 3322,
+      "sha256": "54b84d214885626f344b951761ad162a387185dad32f909693ac70e548e02a01"
+    },
+    {
+      "url": "https://www.getnet.net/en/resources/whats-new",
+      "title": "What's new",
+      "chars": 9468,
+      "sha256": "2122d17ad809961a707147fb5fb13656acdf68b0d887a8869c261ad4fd8e335f"
+    },
+    {
+      "url": "https://www.getnet.net/en/your-business/industries/restaurants",
+      "title": "Restaurants",
+      "chars": 3806,
+      "sha256": "7e6c685d5fc7435cd99000c94af9e95758fc5d09a9b30d99ce1b841bf3db993b"
+    },
+    {
+      "url": "https://www.getnet.net/en/your-business/industries/travel",
+      "title": "Travel",
+      "chars": 3567,
+      "sha256": "7d1621b8f3a6645926c73b8c9bb975c41e6d74d9f539cb4c603a1726e769e04f"
+    },
+    {
+      "url": "https://www.getnet.net/en/your-business/large-enterprises",
+      "title": "Large Enterprises",
+      "chars": 2684,
+      "sha256": "2467a7ac0429b1d88e7ba9f1380d5075319bad4c10d6a2f8dcec661f0ca31588"
+    }
+  ],
+  "attribution": "Contenido público de https://www.getnet.net, © Getnet. Solo para evaluar el RAG."
+}

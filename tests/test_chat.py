@@ -67,6 +67,17 @@ def test_contrato_de_la_peticion_del_router(chat, fake_groq):
     assert set(schema["enum"]) == {"guardrail", "knowledge", "support"}
 
 
+def test_el_bucle_react_se_corta_al_tope_de_herramientas(chat, fake_groq):
+    r = chat("Pregunta que provoca un bucle de búsquedas")
+    assert r.status_code == 200  # antes: GraphRecursionError → 500
+    body = r.json()
+    assert body["tools_used"] == ["search_getnet_knowledge"] * main.MAX_TOOL_CALLS_PER_TURN
+    assert body["response"] == "RESPUESTA_FINAL_SIN_HERRAMIENTAS"
+    final = fake_groq.requests[-1]
+    assert not final.get("tools")  # sin herramientas: Groq rechaza tool_choice="none" si el modelo insiste
+    assert "Pregunta que provoca un bucle" in final["messages"][-1]["content"]
+
+
 def test_el_router_solo_tiene_tres_destinos():
     destinos = {e.target for e in main.graph.get_graph().edges if e.source == "router"}
     assert destinos == {"guardrail", "knowledge", "support"}
