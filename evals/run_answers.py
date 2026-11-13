@@ -28,6 +28,13 @@ import main  # noqa: E402
 
 DATASET = "answers.jsonl"
 CHECKS = ("routed", "source_hit", "fact", "language", "cites")
+DASHES = re.compile(r"[‐-―−]")  # guiones Unicode (gpt-oss usa el no separable, U+2011)
+CITATION = re.compile(r"[\[【]\d+[\]】†]")  # [1], 【1】 o 【1†L1-L7】 (formato de cita de gpt-oss)
+
+
+def normalize(text: str) -> str:
+    """Sin negritas, guiones Unicode como '-', cualquier espacio como ' ' y en minúsculas."""
+    return re.sub(r"\s+", " ", DASHES.sub("-", text.replace("*", ""))).lower()
 ES = set("el la los las de que y en un una es para con por del se su al como más qué cuál".split())
 EN = set("the of and to in is for with on that by as are be this it from an or at".split())
 
@@ -55,9 +62,9 @@ async def run(cases: list[dict], pace: float) -> tuple[list[dict], dict]:
                 checks = {
                     "routed": result["next_node"] == "knowledge",
                     "source_hit": case["source"] in sources,
-                    "fact": any(f.lower() in answer.lower() for f in case["facts_any"]),
+                    "fact": any(normalize(f) in normalize(answer) for f in case["facts_any"]),
                     "language": language(answer) == case["lang"],
-                    "cites": bool(re.search(r"\[\d+\]", answer)),
+                    "cites": bool(CITATION.search(answer)),
                 }
                 error = None
             except Exception as exc:

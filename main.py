@@ -5,6 +5,10 @@ Flujo del grafo:
     START -> router -- next_node --+--> guardrail ----------------------------> END
                                    +--> knowledge <-> knowledge_tools (RAG) --> END
                                    +--> support   <-> support_tools ----------> END
+                                                      (interrupt() -> operador humano -> Command(resume))
+
+Cada conversation_id es un hilo de LangGraph con su checkpoint en SQLite (memoria y pausas de HITL).
+La identidad sale del JWT y llega a las herramientas inyectada (InjectedState), nunca desde el LLM.
 
 Ejecutar:
     export GROQ_API_KEY="..." JWT_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
@@ -252,6 +256,12 @@ y sus productos y servicios.
 
 knowledge_tools = [search_getnet_knowledge]
 knowledge_llm = llm.bind_tools(knowledge_tools)
+# Tras MAX_TOOL_CALLS_PER_TURN herramientas en el mismo turno, el agente debe responder con lo que tenga:
+# las herramientas siguen declaradas, pero tool_choice="none" impide pedir más (bucle ReAct acotado).
+knowledge_llm_final = llm.bind_tools(knowledge_tools, tool_choice="none")
+MAX_TOOL_CALLS_PER_TURN = 3
+FINAL_ANSWER_NOTE = ("Ya has consultado las herramientas el máximo de veces para este mensaje. "
+                     "Responde ahora con la información obtenida y, si no encontraste el dato, dilo.")
 
 
 def recent_history(messages: list[AnyMessage]) -> list[AnyMessage]:
@@ -260,11 +270,27 @@ def recent_history(messages: list[AnyMessage]) -> list[AnyMessage]:
                          start_on="human")
 
 
+def tool_calls_this_turn(messages: list[AnyMessage]) -> int:
+    """Herramientas ejecutadas desde el último mensaje del usuario."""
+    count = 0
+    for message in reversed(messages):
+        if isinstance(message, HumanMessage):
+            break
+        count += isinstance(message, ToolMessage)
+    return count
+
+
+async def call_agent(state: State, prompt: str, with_tools, final) -> AIMessage:
+    """Llama al agente con su historial; al llegar al tope de herramientas, le obliga a responder."""
+    messages = [SystemMessage(content=prompt), *recent_history(state["messages"])]
+    if tool_calls_this_turn(state["messages"]) >= MAX_TOOL_CALLS_PER_TURN:
+        return await final.ainvoke([*messages, SystemMessage(content=FINAL_ANSWER_NOTE)])
+    return await with_tools.ainvoke(messages)
+
+
 async def knowledge_agent(state: State) -> dict:
     """Responde dudas generales apoyándose en el RAG de la web de Getnet."""
-    history = recent_history(state["messages"])
-    response = await knowledge_llm.ainvoke([SystemMessage(content=KNOWLEDGE_PROMPT), *history])
-    return {"messages": [response]}
+    return {"messages": [await call_agent(state, KNOWLEDGE_PROMPT, knowledge_llm, knowledge_llm_final)]}
 
 
 # --------------------------------------------------------------------------------------
@@ -333,13 +359,12 @@ pago (TPV/POS), de pagos y transacciones, y de la cuenta del cliente.
 
 support_tools = [check_transaction_status, check_terminal_connection, request_refund, escalate_to_human]
 support_llm = llm.bind_tools(support_tools)
+support_llm_final = llm.bind_tools(support_tools, tool_choice="none")
 
 
 async def support_agent(state: State) -> dict:
     """Diagnostica la incidencia con las herramientas del sistema y propone la solución."""
-    history = recent_history(state["messages"])
-    response = await support_llm.ainvoke([SystemMessage(content=SUPPORT_PROMPT), *history])
-    return {"messages": [response]}
+    return {"messages": [await call_agent(state, SUPPORT_PROMPT, support_llm, support_llm_final)]}
 
 
 # --------------------------------------------------------------------------------------

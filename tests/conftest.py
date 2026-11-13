@@ -77,7 +77,12 @@ class FakeGroq:
                      else "support" if any(w in low for w in ("terminal", "reembolso", "persona"))
                      else "knowledge")
             return completion(tool_calls=[("RouteDecision", {"next_node": route, "reason": "test"})])
+        if kwargs.get("tool_choice") == "none":  # el agente llegó al tope de herramientas del turno
+            return completion(content="RESPUESTA_FINAL_SIN_HERRAMIENTAS")
         if "search_getnet_knowledge" in tools:  # knowledge
+            if "bucle" in low:  # el LLM no deja de buscar
+                query = {"query": f"intento {len(turn_tools)}"}
+                return completion(tool_calls=[("search_getnet_knowledge", query)])
             if not turn_tools:
                 return completion(tool_calls=[("search_getnet_knowledge", {"query": "online payments"})])
             context = turn_tools[-1]["content"][:160].replace("\n", " ")
