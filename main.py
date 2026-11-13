@@ -34,6 +34,7 @@ from fastapi import Depends, FastAPI, HTTPException, Path, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_community.vectorstores import FAISS
+from langchain_core.documents import Document
 from langchain_core.messages import (
     AIMessage,
     AnyMessage,
@@ -175,34 +176,68 @@ async def guardrail_node(_state: State) -> dict:
 # --------------------------------------------------------------------------------------
 _vectorstore: FAISS | None = None  # se construye una sola vez, al arrancar la API
 
+# Snapshot versionado de las páginas EN de getnet.net (scripts/ingest.py, con WebBaseLoader y solo el
+# contenido de <main>). Si no existe, se descarga https://www.getnet.net/en en vivo, como en el enunciado.
+CORPUS_PATH = os.getenv("CORPUS_PATH", "data/corpus/getnet_en.jsonl")
 
-def build_vectorstore() -> FAISS:
-    """Web de Getnet -> fragmentos -> embeddings all-MiniLM-L6-v2 -> índice FAISS en memoria."""
+
+def load_corpus() -> list[Document]:
+    """Páginas del snapshot, cada una con su URL y título como metadatos."""
+    if os.path.exists(CORPUS_PATH):
+        with open(CORPUS_PATH, encoding="utf-8") as f:
+            records = [json.loads(line) for line in f if line.strip()]
+        return [Document(page_content=r["text"], metadata={"source": r["url"], "title": r["title"]})
+                for r in records]
     loader = WebBaseLoader(
         GETNET_URL,
         raise_for_status=True,  # no indexar páginas de error
         requests_kwargs={"timeout": 20},
         bs_get_text_kwargs={"separator": "\n", "strip": True},
     )
+    return loader.load()
+
+
+def split_unique(docs: list[Document]) -> list[Document]:
+    """Fragmentos de 800 caracteres sin duplicados: los repetidos ocuparían el top-k sin aportar nada."""
     splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100)
-    chunks = splitter.split_documents(loader.load())
-    return FAISS.from_documents(chunks, HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL))
+    seen, chunks = set(), []
+    for chunk in splitter.split_documents(docs):
+        key = " ".join(chunk.page_content.split()).lower()
+        if key not in seen:
+            seen.add(key)
+            chunks.append(chunk)
+    return chunks
 
 
-@tool
-def search_getnet_knowledge(query: str) -> str:
+def build_vectorstore() -> FAISS:
+    """Corpus de Getnet -> fragmentos únicos -> embeddings all-MiniLM-L6-v2 -> índice FAISS en memoria."""
+    return FAISS.from_documents(split_unique(load_corpus()),
+                                HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL))
+
+
+@tool(response_format="content_and_artifact")
+def search_getnet_knowledge(query: str) -> tuple[str, list[str]]:
     """Busca información oficial en la web de Getnet: la empresa, sus productos y soluciones de
     pago (presenciales, online, omnicanal), sectores que atiende y servicios de valor añadido.
-    Escribe la consulta en inglés, porque el contenido indexado está en inglés."""
+    Escribe la consulta en inglés, porque el contenido indexado está en inglés. Cada fragmento
+    indica la página de la que procede."""
     if _vectorstore is None:
-        return "La base de conocimiento de Getnet no está disponible en este momento."
+        return "La base de conocimiento de Getnet no está disponible en este momento.", []
     docs = _vectorstore.similarity_search(query, k=4)
-    return "\n\n---\n\n".join(doc.page_content for doc in docs) or "Sin resultados relevantes."
+    if not docs:
+        return "Sin resultados relevantes.", []
+    content = "\n\n---\n\n".join(
+        f"[{i}] {d.metadata.get('title', '')} ({d.metadata.get('source', '')})\n{d.page_content}"
+        for i, d in enumerate(docs, 1)
+    )
+    # El artefacto (las URLs recuperadas) no lo ve el LLM: la API lo devuelve como `sources`.
+    return content, list(dict.fromkeys(d.metadata["source"] for d in docs if d.metadata.get("source")))
 
 
 KNOWLEDGE_PROMPT = """Eres el agente de conocimiento de Getnet. Respondes dudas generales sobre Getnet
 y sus productos y servicios.
 - Antes de responder, consulta siempre la herramienta search_getnet_knowledge.
+- Cita entre corchetes los fragmentos en los que te apoyas, por ejemplo [1]. No inventes enlaces.
 - Responde solo con la información recuperada. Si no aparece, dilo y sugiere contactar con el
   equipo comercial de Getnet. No inventes datos.
 - Sé claro y breve, y responde en el mismo idioma que el usuario."""
@@ -527,6 +562,7 @@ class ChatResponse(BaseModel):
     agent: str  # nodo que atendió la consulta: guardrail | knowledge | support
     response: str
     tools_used: list[str]  # herramientas ejecutadas en este turno, en orden
+    sources: list[str] = []  # URLs recuperadas por el RAG en este turno (procedencia de la respuesta)
     ticket_id: str | None = None  # si la conversación queda en espera de un operador
 
 
@@ -545,8 +581,10 @@ async def owned_snapshot(conversation_id: str, owner: str):
 async def turn_response(result: dict, conversation_id: str, owner: str, prior: int) -> ChatResponse:
     """Respuesta de un turno. Si el grafo se ha pausado en un interrupt(), crea el ticket."""
     turn = result["messages"][prior:]
+    tool_messages = [m for m in turn if isinstance(m, ToolMessage)]
+    sources = [url for m in tool_messages if m.name == "search_getnet_knowledge" for url in m.artifact or []]
     common = {"user_id": owner, "conversation_id": conversation_id, "agent": result["next_node"],
-              "tools_used": [m.name for m in turn if isinstance(m, ToolMessage)]}
+              "tools_used": [m.name for m in tool_messages], "sources": list(dict.fromkeys(sources))}
     if pending := result.get("__interrupt__"):
         ticket_id = await tickets.create(conversation_id, owner, pending[0].value)
         logger.info("Conversación en espera de un operador (ticket=%s, user=%s)", ticket_id, user_ref(owner))
