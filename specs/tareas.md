@@ -81,4 +81,4 @@ F7 y F8 quedan descartadas hoy por [DEC-018](decisiones.md#dec-018) y son el pun
 
 - [x] **T-090** README: sección «Novedades respecto a la versión evaluada» (brecha → cambio → evidencia), arquitectura, evaluaciones y limitaciones al día. → EVID-08
 - [x] **T-091** Informes de evaluación en [evals/reports/](../evals/reports/), con commit, modelo y hashes. → EVID-08
-- [ ] **T-092** Tag `v5-reevaluacion`, `main` congelado y CI en verde. → EVID-02
+- [x] **T-092** Tag `v5-reevaluacion` sobre el merge de la última fase, con la CI de `main` en verde. → EVID-02

@@ -75,7 +75,7 @@ Quedan fuera de esta entrega, por decisión registrada: la colaboración y repla
 - **Con Docker (recomendado):** Docker con Docker Compose v2.
 - **En local:** Python 3.10 o superior (probado con 3.11).
 - Una API key de Groq: <https://console.groq.com/keys>.
-- Salida a internet en el arranque: la API descarga `https://www.getnet.net/en` para construir el índice RAG.
+- El arranque no necesita la web de Getnet: el índice RAG se construye desde el snapshot versionado en `data/corpus/`. Solo hace falta salida a internet para llamar a Groq.
 
 ### Paso 1. Configurar el `.env`
 
@@ -107,7 +107,7 @@ docker compose up --build -d
 ```
 
 - **Build:** instala las dependencias (torch en su versión CPU) y descarga el modelo de embeddings dentro de la imagen. La primera vez tarda unos minutos. Después, un cambio en `main.py` solo reconstruye la última capa.
-- **Arranque:** la API descarga la web de Getnet, calcula los embeddings y construye el índice FAISS en memoria. Tarda unos segundos.
+- **Arranque:** la API carga el snapshot del corpus, calcula los embeddings de sus 500 fragmentos, construye el índice FAISS en memoria y abre el SQLite del volumen `state`. En local tardó unos 20 segundos hasta quedar `healthy`.
 
 Para comprobar el estado y ver los logs:
 
@@ -155,7 +155,9 @@ La primera ejecución descarga el modelo `all-MiniLM-L6-v2` (unos 90 MB) en `~/.
 |---|---|
 | Todas las peticiones devuelven `500` | El detalle está en los logs. Suele ser una clave inválida (`401`), un modelo retirado (`model_decommissioned`) o un límite de uso (`429`). |
 | En Docker aparece `Could not reach the Hub ... offline mode is enabled ... Using cached commit hash` | Es esperado: el contenedor funciona en modo offline y carga el modelo incluido en la imagen. |
-| `No se pudo construir la base de conocimiento` | Sin acceso a la web de Getnet al arrancar. La API funciona igualmente, pero el Knowledge Agent avisará de que no tiene información. Reinicia cuando haya conexión. |
+| `No se pudo construir la base de conocimiento` | Falta el snapshot (`data/corpus/`) y la web de Getnet no responde. La API funciona igualmente (`/health/ready` indica `"knowledge_base": "degraded"`), pero el Knowledge Agent avisará de que no tiene información. |
+| `localhost:8000` no responde o el puerto está ocupado | Otro proceso usa el puerto 8000, por ejemplo un `uvicorn` local. Ciérralo o cambia el puerto publicado en `docker-compose.yml`. |
+| `401` en `/chat` | Falta el token o está caducado. Emite uno con `scripts/issue_token.py`; dura 1 hora por defecto. |
 | Errores de instalación en local | Se necesita Python 3.10 o superior. Las versiones actuales de LangGraph y LangChain no soportan 3.9. |
 
 ## Uso de la API
