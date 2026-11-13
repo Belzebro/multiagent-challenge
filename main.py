@@ -7,41 +7,73 @@ Flujo del grafo:
                                    +--> support   <-> support_tools ----------> END
 
 Ejecutar:
-    export GROQ_API_KEY="..."
+    export GROQ_API_KEY="..." JWT_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
     uvicorn main:app --reload
+    python scripts/issue_token.py --sub user-123      # token de desarrollo para llamar a /chat
 """
 
 import asyncio
+import contextvars
+import hashlib
+import hmac
 import logging
 import os
+import re
+import uuid
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from typing import Annotated, Literal, TypedDict
 
 # WebBaseLoader lee USER_AGENT al importarse: así se identifica y no avisa en cada arranque.
 os.environ.setdefault("USER_AGENT", "Mozilla/5.0 (compatible; GetnetMultiAgent/1.0)")
 
-from fastapi import FastAPI, HTTPException
+import jwt
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_community.vectorstores import FAISS
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage, ToolMessage
-from langchain_core.tools import BaseTool, tool
+from langchain_core.tools import tool
 from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
-from langgraph.prebuilt import tools_condition
+from langgraph.prebuilt import InjectedState, ToolNode, tools_condition
 from pydantic import BaseModel, Field
 
 # --------------------------------------------------------------------------------------
 # 1. Configuración
 # --------------------------------------------------------------------------------------
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s | %(message)s")
+request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
+
+
+class RequestIdFilter(logging.Filter):
+    """Añade a cada línea de log el request_id de la petición en curso."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.request_id = request_id_var.get()
+        return True
+
+
+_log_handler = logging.StreamHandler()
+_log_handler.addFilter(RequestIdFilter())
+logging.basicConfig(level=logging.INFO, handlers=[_log_handler],
+                    format="%(asctime)s %(levelname)s %(name)s [%(request_id)s] | %(message)s")
 logger = logging.getLogger("getnet.multiagent")
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
     raise RuntimeError("Falta la variable de entorno GROQ_API_KEY.")
+
+# Autenticación con JWT firmados con HS256. En producción se usaría RS256 con las claves públicas
+# (JWKS) del proveedor de identidad: solo cambiaría la verificación de get_principal().
+JWT_SECRET = os.getenv("JWT_SECRET", "")
+if len(JWT_SECRET) < 32:
+    raise RuntimeError("Falta JWT_SECRET o tiene menos de 32 caracteres.")
+JWT_ISSUER = os.getenv("JWT_ISSUER", "getnet-multiagent-dev")
+JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "getnet-multiagent-api")
+USER_ID_PATTERN = r"^[\w.@-]{1,64}$"
 
 # El enunciado pide 'llama-3.1-70b-versatile', pero Groq lo apagó el 24/01/2025 y su sustituto
 # 'llama-3.3-70b-versatile' se apagó el 16/08/2026 (planes free/developer). Por defecto se usa el
@@ -166,8 +198,11 @@ async def knowledge_agent(state: State) -> dict:
 # --------------------------------------------------------------------------------------
 # 5. Agent 3: Support Agent (herramientas que simulan sistemas internos)
 # --------------------------------------------------------------------------------------
+# Guardrail de identidad: `user_id` se declara con InjectedState, así que no aparece en el esquema que
+# ve el LLM y el ToolNode lo rellena siempre con el del estado (el `sub` del token verificado). Aunque un
+# prompt injection consiga que el modelo envíe otro user_id, la herramienta se ejecuta con el del cliente.
 @tool
-def check_transaction_status(user_id: str) -> str:
+def check_transaction_status(user_id: Annotated[str, InjectedState("user_id")]) -> str:
     """Consulta en el sistema de pagos de Getnet las últimas transacciones del usuario
     (aprobadas, rechazadas o pendientes) y el estado de sus liquidaciones."""
     return (
@@ -180,7 +215,7 @@ def check_transaction_status(user_id: str) -> str:
 
 
 @tool
-def check_terminal_connection(user_id: str) -> str:
+def check_terminal_connection(user_id: Annotated[str, InjectedState("user_id")]) -> str:
     """Diagnostica el terminal de pago (TPV/POS) del usuario: conexión con los servidores de
     Getnet, red, firmware y errores recientes."""
     return (
@@ -193,7 +228,7 @@ def check_terminal_connection(user_id: str) -> str:
 
 SUPPORT_PROMPT = """Eres el agente de soporte técnico de Getnet. Resuelves incidencias del terminal de
 pago (TPV/POS), de pagos y transacciones, y de la cuenta del cliente.
-- El cliente autenticado tiene user_id "{user_id}". Usa ese user_id al llamar a las herramientas.
+- Las herramientas ya actúan sobre el cliente autenticado: no necesitan ningún identificador.
 - Diagnostica antes de responder: check_transaction_status para pagos, transacciones o cuenta, y
   check_terminal_connection para problemas del terminal (o ambas si hace falta).
 - Explica qué has encontrado y da pasos concretos para resolverlo. Si no se puede resolver en
@@ -206,41 +241,8 @@ support_llm = llm.bind_tools(support_tools)
 
 async def support_agent(state: State) -> dict:
     """Diagnostica la incidencia con las herramientas del sistema y propone la solución."""
-    system = SystemMessage(content=SUPPORT_PROMPT.format(user_id=state["user_id"]))
-    response = await support_llm.ainvoke([system, *state["messages"]])
+    response = await support_llm.ainvoke([SystemMessage(content=SUPPORT_PROMPT), *state["messages"]])
     return {"messages": [response]}
-
-
-def make_tools_node(tools: list[BaseTool]):
-    """Crea el nodo que ejecuta las tool calls del último mensaje de un agente.
-
-    Guardrail de identidad: si la herramienta recibe `user_id`, se usa SIEMPRE el de la
-    petición y nunca el que proponga el LLM. Así un prompt injection del tipo "revisa los
-    pagos del usuario 123" no puede consultar datos de otro cliente.
-    """
-    tools_by_name = {t.name: t for t in tools}
-
-    async def tools_node(state: State) -> dict:
-        tool_messages = []
-        for call in state["messages"][-1].tool_calls:
-            selected = tools_by_name.get(call["name"])
-            if selected is None:
-                output = f"Error: la herramienta '{call['name']}' no existe."
-            else:
-                args = dict(call["args"])
-                if "user_id" in selected.args:
-                    args["user_id"] = state["user_id"]
-                try:
-                    output = await selected.ainvoke(args)
-                except Exception:
-                    logger.exception("Fallo en la herramienta %s", call["name"])
-                    output = f"Error: no se pudo ejecutar {call['name']}."
-            tool_messages.append(
-                ToolMessage(content=str(output), name=call["name"], tool_call_id=call["id"])
-            )
-        return {"messages": tool_messages}
-
-    return tools_node
 
 
 # --------------------------------------------------------------------------------------
@@ -251,9 +253,11 @@ def build_graph():
     builder.add_node("router", router_agent)
     builder.add_node("guardrail", guardrail_node)
     builder.add_node("knowledge", knowledge_agent)
-    builder.add_node("knowledge_tools", make_tools_node(knowledge_tools))
+    # ToolNode inyecta los argumentos InjectedState (user_id) y devuelve los errores de una
+    # herramienta al agente como ToolMessage, sin romper la petición.
+    builder.add_node("knowledge_tools", ToolNode(knowledge_tools))
     builder.add_node("support", support_agent)
-    builder.add_node("support_tools", make_tools_node(support_tools))
+    builder.add_node("support_tools", ToolNode(support_tools))
 
     builder.add_edge(START, "router")
     builder.add_conditional_edges(
@@ -290,13 +294,75 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="Getnet Multi-Agent API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Getnet Multi-Agent API", version="1.1.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    """Asigna un X-Request-ID a cada petición (respeta el del cliente si es válido) y lo devuelve."""
+    request_id = request.headers.get("X-Request-ID", "")
+    if not re.fullmatch(r"[\w.-]{8,64}", request_id):
+        request_id = uuid.uuid4().hex
+    token = request_id_var.set(request_id)
+    try:
+        response = await call_next(request)
+    finally:
+        request_id_var.reset(token)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
+def user_ref(user_id: str) -> str:
+    """Seudónimo estable del usuario para los logs: HMAC con JWT_SECRET, no reversible sin el secreto."""
+    return hmac.new(JWT_SECRET.encode(), user_id.encode(), hashlib.sha256).hexdigest()[:12]
+
+
+@dataclass(frozen=True)
+class Principal:
+    """Identidad autenticada: sale del token, nunca del cuerpo de la petición ni del LLM."""
+
+    sub: str
+    role: str  # "merchant" (comercio cliente) | "operator" (agente humano de Getnet)
+
+
+_bearer = HTTPBearer(auto_error=False)
+
+
+def get_principal(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+) -> Principal:
+    """Verifica el JWT: firma HS256, emisor, audiencia y caducidad."""
+    unauthorized = {"status_code": 401, "headers": {"WWW-Authenticate": "Bearer"}}
+    if credentials is None:
+        raise HTTPException(detail="Falta el token Bearer.", **unauthorized)
+    try:
+        claims = jwt.decode(
+            credentials.credentials, JWT_SECRET, algorithms=["HS256"], audience=JWT_AUDIENCE,
+            issuer=JWT_ISSUER, options={"require": ["exp", "iat", "sub", "iss", "aud"]},
+        )
+    except jwt.PyJWTError as exc:
+        raise HTTPException(detail="Token inválido o caducado.", **unauthorized) from exc
+    sub, role = claims["sub"], claims.get("role")
+    if role not in ("merchant", "operator") or not re.fullmatch(USER_ID_PATTERN, sub):
+        raise HTTPException(detail="El token no tiene un sub o un rol válidos.", **unauthorized)
+    return Principal(sub=sub, role=role)
+
+
+def require_role(role: str):
+    """Dependencia que exige un rol: 403 si el token es válido pero de otro rol."""
+
+    def dependency(principal: Annotated[Principal, Depends(get_principal)]) -> Principal:
+        if principal.role != role:
+            raise HTTPException(status_code=403, detail="Tu rol no permite usar este recurso.")
+        return principal
+
+    return dependency
 
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
-    # Formato restringido porque el user_id se inserta en el prompt del agente de soporte.
-    user_id: str = Field(pattern=r"^[\w.@-]{1,64}$")
+    # Se mantiene por el contrato del enunciado, pero manda el token: debe coincidir con su `sub`.
+    user_id: str = Field(pattern=USER_ID_PATTERN)
 
 
 class ChatResponse(BaseModel):
@@ -307,20 +373,25 @@ class ChatResponse(BaseModel):
 
 
 @app.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest) -> ChatResponse:
+async def chat(
+    request: ChatRequest, principal: Annotated[Principal, Depends(require_role("merchant"))]
+) -> ChatResponse:
+    if request.user_id != principal.sub:
+        logger.warning("user_id del cuerpo distinto del token (user=%s)", user_ref(principal.sub))
+        raise HTTPException(status_code=403, detail="El user_id no coincide con la identidad del token.")
     initial_state: State = {
         "messages": [HumanMessage(content=request.message)],
-        "user_id": request.user_id,
+        "user_id": principal.sub,  # identidad verificada: es la que reciben las herramientas
         "next_node": "",
     }
     try:
         final_state = await graph.ainvoke(initial_state, {"recursion_limit": MAX_GRAPH_STEPS})
     except Exception as exc:
-        logger.exception("Error procesando /chat (user_id=%s)", request.user_id)
+        logger.exception("Error procesando /chat (user=%s)", user_ref(principal.sub))
         raise HTTPException(status_code=500, detail="Error interno al procesar el mensaje.") from exc
 
     return ChatResponse(
-        user_id=request.user_id,
+        user_id=principal.sub,
         agent=final_state["next_node"],
         response=final_state["messages"][-1].text,  # solo el texto, aunque haya bloques de razonamiento
         tools_used=[m.name for m in final_state["messages"] if isinstance(m, ToolMessage)],

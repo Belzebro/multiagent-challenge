@@ -66,7 +66,8 @@ jobs:
 
       - name: Smoke test del contenedor
         run: |
-          docker run -d --name api -p 8000:8000 -e GROQ_API_KEY=ci-dummy-key getnet-multiagent-api:ci
+          docker run -d --name api -p 8000:8000 -e GROQ_API_KEY=ci-dummy-key \
+            -e JWT_SECRET=ci-only-secret-0123456789abcdef0123456789 getnet-multiagent-api:ci
           for _ in $(seq 1 36); do
             status=$(docker inspect -f '{{.State.Health.Status}}' api)
             echo "health: $status"
@@ -75,7 +76,14 @@ jobs:
           done
           docker logs api 2>&1 | grep -v Batches | tail -n 20
           test "$(docker inspect -f '{{.State.Health.Status}}' api)" = "healthy"
-          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8000/chat \
-            -H 'Content-Type: application/json' -d '{"message": "", "user_id": "ci-user"}')
-          echo "POST /chat con mensaje vacío -> $code"
-          test "$code" = "422"
+          post() {  # $1 = cabecera de autorización, $2 = cuerpo JSON
+            curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8000/chat \
+              -H 'Content-Type: application/json' -H "$1" -d "$2"
+          }
+          token=$(docker exec api python scripts/issue_token.py --sub ci-user)
+          code=$(post "X-No-Auth: 1" '{"message": "hola", "user_id": "ci-user"}')
+          echo "sin token -> $code"; test "$code" = "401"
+          code=$(post "Authorization: Bearer $token" '{"message": "hola", "user_id": "otro-usuario"}')
+          echo "user_id distinto del token -> $code"; test "$code" = "403"
+          code=$(post "Authorization: Bearer $token" '{"message": "", "user_id": "ci-user"}')
+          echo "mensaje vacío con token -> $code"; test "$code" = "422"

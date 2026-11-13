@@ -23,12 +23,12 @@ Estado: `[ ]` pendiente · `[~]` en curso · `[x]` hecha · `[-]` descartada (co
 
 ## F2: identidad (A)
 
-- [ ] **T-020** Verificación JWT (`sub`, `role`, `exp`, `iss`, `aud`) y `scripts/issue_token.py`. → SEC-01
-- [ ] **T-021** `/chat` exige rol `merchant` y `user_id == sub` (403). → SEC-02
-- [ ] **T-022** Tools con `InjectedState` y `ToolNode`; tests de schema sin `user_id` y de `user_id` falsificado. → SEC-03
-- [ ] **T-023** `request_id` y seudónimo de `sub` en los logs. → SEC-04, OBS-01
+- [x] **T-020** Verificación JWT (`sub`, `role`, `exp`, `iss`, `aud`) y [scripts/issue_token.py](../scripts/issue_token.py). Evidencia: [tests/test_auth.py](../tests/test_auth.py). → SEC-01
+- [x] **T-021** `/chat` exige rol `merchant` y `user_id == sub` (403). Evidencia: [tests/test_auth.py](../tests/test_auth.py) y smoke test del contenedor en la CI. → SEC-02
+- [x] **T-022** Tools con `InjectedState` y `ToolNode`; tests de schema sin `user_id` y de `user_id` falsificado. → SEC-03
+- [x] **T-023** `X-Request-ID` y seudónimo de `sub` en los logs. Evidencia: [tests/test_auth.py](../tests/test_auth.py). → SEC-04, OBS-01
 - [-] **T-024** Rate limit por `sub`. Descartada por [DEC-018](decisiones.md#dec-018).
-- [ ] **T-025** Compose, `.env.example` y README con `JWT_SECRET` y ejemplos con token. → SEC-01
+- [x] **T-025** Compose, `.env.example` y README con `JWT_SECRET` y ejemplos con token. → SEC-01
 
 ## F3: evaluaciones y corpus (A)
 

@@ -8,9 +8,12 @@ no necesita red ni una GROQ_API_KEY real.
 
 import json
 import os
+import time
 
 os.environ.setdefault("GROQ_API_KEY", "test-key-never-sent")
+os.environ.setdefault("JWT_SECRET", "pytest-only-secret-0123456789abcdef-0123456789")
 
+import jwt  # noqa: E402
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from langchain_community.vectorstores import FAISS  # noqa: E402
@@ -100,7 +103,41 @@ def offline_kb(monkeypatch):
                         lambda: FAISS.from_documents(KB_DOCS, DeterministicFakeEmbedding(size=384)))
 
 
+def make_token(sub="user-123", role="merchant", ttl=3600, secret=None, **overrides):
+    """JWT firmado como los de scripts/issue_token.py; overrides cambia o añade claims."""
+    now = int(time.time())
+    claims = {"sub": sub, "role": role, "iat": now, "exp": now + ttl,
+              "iss": main.JWT_ISSUER, "aud": main.JWT_AUDIENCE, **overrides}
+    return jwt.encode(claims, secret or main.JWT_SECRET, algorithm="HS256")
+
+
+@pytest.fixture
+def make_jwt():
+    return make_token
+
+
+@pytest.fixture
+def auth():
+    """Cabeceras con un JWT válido: auth() es user-123 (merchant); auth("ops-1", "operator")..."""
+
+    def _auth(sub="user-123", role="merchant"):
+        return {"Authorization": f"Bearer {make_token(sub, role)}"}
+
+    return _auth
+
+
 @pytest.fixture
 def client(fake_groq, offline_kb):
     with TestClient(main.app) as test_client:  # ejecuta el lifespan
         yield test_client
+
+
+@pytest.fixture
+def chat(client, auth):
+    """POST /chat autenticado como user-123 (salvo que se pasen otras cabeceras)."""
+
+    def _chat(message, user_id="user-123", headers=None):
+        return client.post("/chat", json={"message": message, "user_id": user_id},
+                           headers=auth() if headers is None else headers)
+
+    return _chat
