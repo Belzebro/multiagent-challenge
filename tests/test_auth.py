@@ -61,8 +61,10 @@ def test_user_id_distinto_del_token_403(client, auth):
 
 
 def test_las_tools_de_soporte_no_exponen_user_id_al_llm():
-    for t in main.support_tools:
-        assert convert_to_openai_tool(t)["function"]["parameters"].get("properties", {}) == {}
+    schemas = {t.name: convert_to_openai_tool(t)["function"]["parameters"].get("properties", {})
+               for t in main.support_tools}
+    assert all("user_id" not in props for props in schemas.values())
+    assert schemas["check_transaction_status"] == schemas["check_terminal_connection"] == {}
 
 
 def test_la_peticion_real_a_groq_no_ofrece_user_id_ni_lo_pone_en_el_prompt(chat, fake_groq):

@@ -43,18 +43,20 @@ Estado: `[ ]` pendiente · `[~]` en curso · `[x]` hecha · `[-]` descartada (co
 
 ## F4: memoria (B)
 
-- [ ] **T-040** Checkpointer SQLite (`STATE_DB`), con `:memory:` en tests. → MEM-03
-- [ ] **T-041** `conversation_id` generado por el servidor, propietario por `sub` y 404 si es ajeno; test de acceso cruzado. → MEM-01, MEM-02
-- [ ] **T-042** `GET /conversations/{id}`. → MEM-05
-- [ ] **T-043** Ventana de contexto con `trim_messages`. → MEM-04
-- [ ] **T-044** Volumen de Docker para el SQLite y prueba de persistencia tras un reinicio. → MEM-03
+Evidencia de F4 y F5: [tests/test_memory_hitl.py](../tests/test_memory_hitl.py).
+
+- [x] **T-040** Checkpointer SQLite (`STATE_DB`), con `:memory:` en tests. → MEM-03
+- [x] **T-041** `conversation_id` generado por el servidor, propietario por `sub` y 404 si es ajeno; test de acceso cruzado. → MEM-01, MEM-02
+- [x] **T-042** `GET /conversations/{id}`. → MEM-05
+- [x] **T-043** Ventana de contexto con `trim_messages`, y la respuesta anterior como contexto del router. → MEM-04
+- [x] **T-044** Volumen de Docker para el SQLite y prueba de persistencia tras un reinicio del lifespan. → MEM-03
 
 ## F5: HITL (B)
 
-- [ ] **T-050** Tools `request_refund` y `escalate_to_human` con `interrupt()`. → HITL-01, HITL-02
-- [ ] **T-051** Tabla `tickets` en SQLite y respuesta `pending_human`. → HITL-04
-- [ ] **T-052** Endpoints de operador: listar, reclamar y resolver con `Command(resume=…)`. → HITL-03, SEC-06
-- [ ] **T-053** Tests: aprobar, rechazar, responder, permisos y doble resolución (409). → HITL-01 a HITL-04
+- [x] **T-050** Tools `request_refund` y `escalate_to_human` con `interrupt()`. → HITL-01, HITL-02
+- [x] **T-051** Tabla `tickets` en SQLite y respuesta `pending_human`. → HITL-04
+- [x] **T-052** Endpoints de operador: listar, reclamar y resolver con `Command(resume=…)`. → HITL-03, SEC-06
+- [x] **T-053** Tests: aprobar, rechazar, responder, permisos, doble resolución y decisión incompatible. → HITL-01 a HITL-04
 
 ## F6: observabilidad (C, solo si sobra tiempo)
 

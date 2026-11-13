@@ -8,3 +8,6 @@ __pycache__/
 venv/
 .ruff_cache/
 .pytest_cache/
+
+# Estado local (SQLite de memoria y tickets)
+data/state/
