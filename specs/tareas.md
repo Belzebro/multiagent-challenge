@@ -32,13 +32,13 @@ Estado: `[ ]` pendiente · `[~]` en curso · `[x]` hecha · `[-]` descartada (co
 
 ## F3: evaluaciones y corpus (A)
 
-- [ ] **T-030** `scripts/ingest.py`: snapshot y manifest de las páginas EN (solo `<main>`). → RAG-01, RAG-02, RAG-03
-- [ ] **T-031** Índice desde el snapshot al arrancar, con fallback a la home; test de chunks duplicados. → RAG-02, RAG-03
-- [ ] **T-032** `sources` en la respuesta de `/chat`. → RAG-04
-- [ ] **T-033** Datasets: routing (≥ 30), recuperación (≥ 30 más negativas) y respuestas (≥ 8, si cabe). → EVID-04, EVID-05, EVID-06
-- [ ] **T-034** Runners, métricas, presupuesto de tokens y manejo de 429. → EVID-04, EVID-05, EVID-06
-- [ ] **T-035** `thresholds.yaml` y `gate.py`; gate de recuperación en la CI. → EVID-07
-- [ ] **T-036** Línea base v4 y ejecución con el corpus nuevo; informes en `evals/reports/`. → EVID-08
+- [x] **T-030** [scripts/ingest.py](../scripts/ingest.py): snapshot y manifest de 55 páginas EN (solo `<main>`, sin líneas de plantilla). → RAG-01, RAG-02, RAG-03
+- [x] **T-031** Índice desde el snapshot al arrancar, con fallback a la home; test de fragmentos duplicados en [tests/test_rag.py](../tests/test_rag.py). → RAG-02, RAG-03
+- [x] **T-032** `sources` en la respuesta de `/chat`, desde el artefacto de la herramienta. → RAG-04
+- [x] **T-033** Datasets en [evals/datasets/](../evals/datasets/): routing (30), recuperación (42 más 5 negativas) y respuestas (10). → EVID-04, EVID-05, EVID-06
+- [x] **T-034** Runners con métricas, tokens y ritmo para el plan gratuito. → EVID-04, EVID-05, EVID-06
+- [x] **T-035** [thresholds.yaml](../evals/thresholds.yaml) y [gate.py](../evals/gate.py); evaluación de recuperación y gate en la CI. → EVID-07
+- [x] **T-036** Línea base v4 frente al corpus nuevo e informes en [evals/reports/](../evals/reports/). → EVID-08
 - [-] **T-037** Workflow manual `evals.yml`. Descartada: la clave está solo en un `.env` local ([Q-008](preguntas.md#q-008)).
 
 ## F4: memoria (B)
@@ -60,9 +60,9 @@ Evidencia de F4 y F5: [tests/test_memory_hitl.py](../tests/test_memory_hitl.py).
 
 ## F6: observabilidad (C, solo si sobra tiempo)
 
-- [ ] **T-060** Tokens y coste por petición. → OBS-02
+- [x] **T-060** Tokens, coste estimado y latencia por turno, en la respuesta y en los logs. Evidencia: [tests/test_observability.py](../tests/test_observability.py). → OBS-02
 - [-] **T-061** Latencia por nodo y `/metrics`. Siguiente iteración ([DEC-018](decisiones.md#dec-018)).
-- [ ] **T-062** `/health/live` y `/health/ready`; el HEALTHCHECK pasa a `ready`. → OBS-04
+- [x] **T-062** `/health/live` y `/health/ready`; el HEALTHCHECK y el smoke test de la CI usan `ready`. → OBS-04
 
 ## F7: RAG v2 (siguiente iteración)
 
@@ -79,6 +79,6 @@ F7 y F8 quedan descartadas hoy por [DEC-018](decisiones.md#dec-018) y son el pun
 
 ## F9: cierre (A, continuo)
 
-- [ ] **T-090** README: arquitectura actualizada, tabla de evidencias y limitaciones. → EVID-08
-- [ ] **T-091** Informes finales de evaluación. → EVID-08
+- [x] **T-090** README: sección «Novedades respecto a la versión evaluada» (brecha → cambio → evidencia), arquitectura, evaluaciones y limitaciones al día. → EVID-08
+- [x] **T-091** Informes de evaluación en [evals/reports/](../evals/reports/), con commit, modelo y hashes. → EVID-08
 - [ ] **T-092** Tag `v5-reevaluacion`, `main` congelado y CI en verde. → EVID-02

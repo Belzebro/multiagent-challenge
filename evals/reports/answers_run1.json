@@ -1,0 +1,266 @@
+{
+  "meta": {
+    "generated_at": "2026-11-13T22:33:48+00:00",
+    "git_commit": "5488e7e",
+    "git_dirty": true,
+    "dataset": "evals/datasets/answers.jsonl",
+    "dataset_sha256": "6df42b62880360dc",
+    "corpus_sha256": "66234f143b1515f3",
+    "model": "openai/gpt-oss-120b"
+  },
+  "summary": {
+    "cases": 10,
+    "errors": 1,
+    "routing_accuracy": 0.9,
+    "source_hit_rate": 0.9,
+    "fact_coverage": 0.5,
+    "language_match": 0.9,
+    "citation_rate": 0.0,
+    "all_checks_pass_rate": 0.0,
+    "latency_p50_s": 2.33,
+    "total_tokens": 37020,
+    "tokens_per_case": 3702
+  },
+  "cases": [
+    {
+      "id": "A01",
+      "lang": "es",
+      "question": "¿Cuál es el correo del equipo comercial global de Getnet para multinacionales?",
+      "source": "https://www.getnet.net/en/contact",
+      "facts_any": [
+        "multinationals@getnet.net"
+      ],
+      "answer": "El correo del equipo comercial global de Getnet para multinacionales es **multinationals@getnet.net**【1】.",
+      "sources": [
+        "https://www.getnet.net/en/contact",
+        "https://www.getnet.net/en",
+        "https://www.getnet.net/en/resources/whats-new"
+      ],
+      "checks": {
+        "routed": true,
+        "source_hit": true,
+        "fact": true,
+        "language": true,
+        "cites": false
+      },
+      "error": null,
+      "latency_s": 1.98
+    },
+    {
+      "id": "A02",
+      "lang": "es",
+      "question": "Según Getnet, ¿qué porcentaje de las empresas de Latinoamérica son pymes?",
+      "source": "https://www.getnet.net/en/resources/blog/evolution-of-lending-solution",
+      "facts_any": [
+        "99"
+      ],
+      "answer": "",
+      "sources": [],
+      "checks": {
+        "routed": false,
+        "source_hit": false,
+        "fact": false,
+        "language": false,
+        "cites": false
+      },
+      "error": "GraphRecursionError",
+      "latency_s": 48.3
+    },
+    {
+      "id": "A03",
+      "lang": "es",
+      "question": "¿Cuál es el NIF de la empresa titular de la web de Getnet?",
+      "source": "https://www.getnet.net/en/legal/legal-notice",
+      "facts_any": [
+        "B87694410",
+        "B-87694410"
+      ],
+      "answer": "El NIF de la empresa titular de la web de Getnet es **B‑87694410**【1】.",
+      "sources": [
+        "https://www.getnet.net/en/legal/legal-notice",
+        "https://www.getnet.net/en/legal/privacy-policy",
+        "https://www.getnet.net/en/resources/blog/mexican-travel-industry",
+        "https://www.getnet.net/en/resources/client-stories/connects-pascual"
+      ],
+      "checks": {
+        "routed": true,
+        "source_hit": true,
+        "fact": false,
+        "language": true,
+        "cites": false
+      },
+      "error": null,
+      "latency_s": 10.24
+    },
+    {
+      "id": "A04",
+      "lang": "en",
+      "question": "What were e-commerce sales in Latin America forecast to reach by 2025?",
+      "source": "https://www.getnet.net/en/resources/blog/the-future-of-cross-border-payments-in-latin-america",
+      "facts_any": [
+        "160"
+      ],
+      "answer": "In Latin America, e‑commerce sales are forecast to reach **about $160 billion by 2025**【2】.",
+      "sources": [
+        "https://www.getnet.net/en/resources/whats-new",
+        "https://www.getnet.net/en/resources/blog/the-future-of-cross-border-payments-in-latin-america",
+        "https://www.getnet.net/en/resources/blog/the-future-of-ecommerce"
+      ],
+      "checks": {
+        "routed": true,
+        "source_hit": true,
+        "fact": true,
+        "language": true,
+        "cites": false
+      },
+      "error": null,
+      "latency_s": 1.76
+    },
+    {
+      "id": "A05",
+      "lang": "es",
+      "question": "¿Qué volumen se espera que alcancen los pagos digitales en Latinoamérica en 2027?",
+      "source": "https://www.getnet.net/en/resources/blog/the-mobile-payment-revolution-in-latin-america",
+      "facts_any": [
+        "0.3",
+        "0,3",
+        "300"
+      ],
+      "answer": "Se estima que el volumen de transacciones de pagos digitales en Latinoamérica alcanzará **USD 0.3 billones** para el año 2027, con un crecimiento anual superior al 10 % desde 2022【1】.",
+      "sources": [
+        "https://www.getnet.net/en/resources/blog/the-mobile-payment-revolution-in-latin-america",
+        "https://www.getnet.net/en/resources/blog/the-role-payments-play-in-elevating-travel-and-tourism",
+        "https://www.getnet.net/en/resources/blog/what-do-new-payment-regulations-mean-for-merchants",
+        "https://www.getnet.net/en/resources/blog/what-is-next-for-the-latin-america-payments-ecosystem"
+      ],
+      "checks": {
+        "routed": true,
+        "source_hit": true,
+        "fact": true,
+        "language": true,
+        "cites": false
+      },
+      "error": null,
+      "latency_s": 3.37
+    },
+    {
+      "id": "A06",
+      "lang": "en",
+      "question": "What share of customers abandon their booking on travel websites?",
+      "source": "https://www.getnet.net/en/resources/blog/the-role-payments-play-in-elevating-travel-and-tourism",
+      "facts_any": [
+        "80"
+      ],
+      "answer": "I’m sorry, but the information I could find in Getnet’s knowledge base does not include a specific figure for the share of customers who abandon their booking on travel websites. I recommend contacting Getnet’s commercial team for the most up‑to‑date statistics on booking abandonment rates.",
+      "sources": [
+        "https://www.getnet.net/en/resources/blog/optimising-your-checkout-process",
+        "https://www.getnet.net/en/resources/blog/payments-infrastructure-will-define-performance-in-the-travel-sector",
+        "https://www.getnet.net/en/resources/blog/the-role-payments-play-in-elevating-travel-and-tourism"
+      ],
+      "checks": {
+        "routed": true,
+        "source_hit": true,
+        "fact": false,
+        "language": true,
+        "cites": false
+      },
+      "error": null,
+      "latency_s": 2.27
+    },
+    {
+      "id": "A07",
+      "lang": "es",
+      "question": "¿Qué solución de seguridad de pagos implantó Meliá Hotels con Getnet?",
+      "source": "https://www.getnet.net/en/resources/client-stories/connects-melia",
+      "facts_any": [
+        "P2PE"
+      ],
+      "answer": "Meliá Hotels International implantó con Getnet una solución de pago **card‑present certificada bajo el estándar Point‑to‑Point Encryption (P2PE)**, integrada con su sistema Opera Cloud, que cumple con más de 500 requisitos de seguridad y facilita la conformidad con PCI DSS【1†L1-L7】【2†L1-L8】.",
+      "sources": [
+        "https://www.getnet.net/en/resources/client-stories/connects-melia"
+      ],
+      "checks": {
+        "routed": true,
+        "source_hit": true,
+        "fact": true,
+        "language": true,
+        "cites": false
+      },
+      "error": null,
+      "latency_s": 2.45
+    },
+    {
+      "id": "A08",
+      "lang": "en",
+      "question": "How did Grupo Pascual's delivery drivers start accepting card payments?",
+      "source": "https://www.getnet.net/en/resources/client-stories/connects-pascual",
+      "facts_any": [
+        "Tap on Phone"
+      ],
+      "answer": "Grupo Pascual equipped its delivery drivers with Getnet’s **Get Tap on Phone** solution. The technology turns the driver’s ordinary mobile phone into a full‑POS terminal, so the driver can accept contactless card payments directly from the device, without any extra hardware. This integration centralized payment, receipt and reconciliation functions on the phone, allowing the drivers to start taking card payments on‑the‑go【1†L1-L7】【2†L4-L9】.",
+      "sources": [
+        "https://www.getnet.net/en/resources/client-stories/connects-pascual",
+        "https://www.getnet.net/en/resources/blog/the-key-fintech-developments-that-shaped-2024",
+        "https://www.getnet.net/en/resources/blog/payment-trends-in-mexico"
+      ],
+      "checks": {
+        "routed": true,
+        "source_hit": true,
+        "fact": false,
+        "language": true,
+        "cites": false
+      },
+      "error": null,
+      "latency_s": 4.1
+    },
+    {
+      "id": "A09",
+      "lang": "en",
+      "question": "When was Getnet's cookie notice last updated?",
+      "source": "https://www.getnet.net/en/legal/cookies",
+      "facts_any": [
+        "July 2026"
+      ],
+      "answer": "The Cookie Notice on Getnet’s website was last updated in **July 2026**【2】.",
+      "sources": [
+        "https://www.getnet.net/en/legal/cookies",
+        "https://www.getnet.net/en/legal/privacy-policy"
+      ],
+      "checks": {
+        "routed": true,
+        "source_hit": true,
+        "fact": false,
+        "language": true,
+        "cites": false
+      },
+      "error": null,
+      "latency_s": 1.91
+    },
+    {
+      "id": "A10",
+      "lang": "es",
+      "question": "¿Qué posición ocupa México en el eCommerce de Latinoamérica?",
+      "source": "https://www.getnet.net/en/resources/blog/payment-trends-in-mexico",
+      "facts_any": [
+        "second",
+        "segundo"
+      ],
+      "answer": "México es el **segundo mercado de e‑commerce más grande de Latinoamérica**【3】.",
+      "sources": [
+        "https://www.getnet.net/en/resources/blog/the-future-of-ecommerce",
+        "https://www.getnet.net/en/resources/blog/the-future-of-cross-border-payments-in-latin-america",
+        "https://www.getnet.net/en/resources/blog/payment-trends-in-mexico",
+        "https://www.getnet.net/en/resources/blog/what-is-next-for-the-latin-america-payments-ecosystem"
+      ],
+      "checks": {
+        "routed": true,
+        "source_hit": true,
+        "fact": true,
+        "language": true,
+        "cites": false
+      },
+      "error": null,
+      "latency_s": 2.33
+    }
+  ]
+}

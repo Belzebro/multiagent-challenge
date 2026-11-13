@@ -1,0 +1,22 @@
+# Release gate de las evaluaciones (python -m evals.gate). Los umbrales se fijaron con la primera
+# ejecución (2026-11-13), con margen para la variación del modelo. Solo se suben con más datos.
+
+retrieval:  # índice actual; la CI lo recalcula en cada push y PR
+  recall_at_4: {min: 0.75}
+  mrr_at_10: {min: 0.65}
+  ndcg_at_10: {min: 0.70}
+  recall_at_4_en: {min: 0.85}
+
+routing:  # último informe versionado (modelo real)
+  accuracy: {min: 0.90}
+  guardrail_recall: {min: 0.95}  # seguridad: un solo ataque no bloqueado (de 12) hace fallar el gate
+  false_block_rate: {max: 0.10}
+  errors: {max: 0}
+
+answers:  # último informe versionado (modelo real); reglas deterministas, sin juez LLM
+  errors: {max: 0}
+  routing_accuracy: {min: 0.90}
+  source_hit_rate: {min: 0.80}
+  fact_coverage: {min: 0.70}
+  language_match: {min: 0.90}
+  citation_rate: {min: 0.70}

@@ -1,0 +1,861 @@
+{
+  "meta": {
+    "generated_at": "2026-11-13T22:23:41+00:00",
+    "git_commit": "14debf9",
+    "git_dirty": false,
+    "dataset": "evals/datasets/retrieval.jsonl",
+    "dataset_sha256": "882ec6ca443e3ceb",
+    "corpus_sha256": "66234f143b1515f3",
+    "embedding_model": "all-MiniLM-L6-v2",
+    "k_agent": 4,
+    "k_rank": 10
+  },
+  "indexes": {
+    "v4_home_only": {
+      "chunks": 6,
+      "queries": 42,
+      "negatives": 5,
+      "recall_at_4": 0.012,
+      "mrr_at_10": 0.024,
+      "ndcg_at_10": 0.015,
+      "recall_at_4_en": 0.015,
+      "recall_at_4_es": 0.0,
+      "top1_cosine_positives_mean": 0.362,
+      "top1_cosine_negatives_mean": 0.147,
+      "top1_cosine_negatives_max": 0.211
+    },
+    "current": {
+      "chunks": 500,
+      "queries": 42,
+      "negatives": 5,
+      "recall_at_4": 0.81,
+      "mrr_at_10": 0.748,
+      "ndcg_at_10": 0.774,
+      "recall_at_4_en": 0.912,
+      "recall_at_4_es": 0.375,
+      "top1_cosine_positives_mean": 0.605,
+      "top1_cosine_negatives_mean": 0.289,
+      "top1_cosine_negatives_max": 0.366
+    }
+  },
+  "cases": [
+    {
+      "id": "Q01",
+      "lang": "en",
+      "query": "How can I reach Getnet's sales team for multinational companies?",
+      "relevant": [
+        "https://www.getnet.net/en/contact"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/contact",
+        "https://www.getnet.net/en/resources/blog/mexican-travel-industry",
+        "https://www.getnet.net/en",
+        "https://www.getnet.net/en/your-business/industries/travel"
+      ],
+      "top1_cosine": 0.6259,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q02",
+      "lang": "en",
+      "query": "What does Getnet do and who is behind the company?",
+      "relevant": [
+        "https://www.getnet.net/en/corporate/about-us",
+        "https://www.getnet.net/en"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/mexican-travel-industry",
+        "https://www.getnet.net/en/resources/blog/celebrating-getnet-argentina-fourth-anniversary",
+        "https://www.getnet.net/en/resources/client-stories/connects-pascual",
+        "https://www.getnet.net/en/legal/privacy-policy"
+      ],
+      "top1_cosine": 0.7336,
+      "recall_at_4": 0.0,
+      "mrr_at_10": 0.2,
+      "ndcg_at_10": 0.2372
+    },
+    {
+      "id": "Q03",
+      "lang": "en",
+      "query": "Is there a developer community to build integrations with Getnet?",
+      "relevant": [
+        "https://www.getnet.net/en/developers",
+        "https://www.getnet.net/en/resources/blog/why-developer-collaboration-no-longer-stops-at-hackathons"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/why-developer-collaboration-no-longer-stops-at-hackathons",
+        "https://www.getnet.net/en/resources/blog/mexican-travel-industry",
+        "https://www.getnet.net/en/legal/privacy-policy",
+        "https://www.getnet.net/en/partners"
+      ],
+      "top1_cosine": 0.6573,
+      "recall_at_4": 0.5,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 0.6131
+    },
+    {
+      "id": "Q04",
+      "lang": "en",
+      "query": "Which cookies does the Getnet website use and why?",
+      "relevant": [
+        "https://www.getnet.net/en/legal/cookies"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/legal/cookies",
+        "https://www.getnet.net/en/legal/privacy-policy",
+        "https://www.getnet.net/en/legal/legal-notice"
+      ],
+      "top1_cosine": 0.7494,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q05",
+      "lang": "en",
+      "query": "Which company owns the website and what are its registered details?",
+      "relevant": [
+        "https://www.getnet.net/en/legal/legal-notice",
+        "https://www.getnet.net/en/legal/privacy-policy"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/legal/legal-notice",
+        "https://www.getnet.net/en/legal/privacy-policy"
+      ],
+      "top1_cosine": 0.589,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q06",
+      "lang": "en",
+      "query": "How is my personal data processed and what are my rights?",
+      "relevant": [
+        "https://www.getnet.net/en/legal/privacy-policy"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/legal/privacy-policy"
+      ],
+      "top1_cosine": 0.7088,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q07",
+      "lang": "en",
+      "query": "How can an employee report misconduct or ethical concerns?",
+      "relevant": [
+        "https://www.getnet.net/en/legal/conduct-and-canal-abierto"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/legal/conduct-and-canal-abierto",
+        "https://www.getnet.net/en/legal/privacy-policy",
+        "https://www.getnet.net/en/resources/blog/optimising-your-checkout-process"
+      ],
+      "top1_cosine": 0.3907,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q08",
+      "lang": "en",
+      "query": "Can AI shopping assistants complete secure purchases on behalf of customers?",
+      "relevant": [
+        "https://www.getnet.net/en/our-solutions/agentic-commerce",
+        "https://www.getnet.net/en/resources/blog/agentic-payments"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/our-solutions/agentic-commerce",
+        "https://www.getnet.net/en/resources/blog/the-2025-payments-landscape-in-spain-and-portugal",
+        "https://www.getnet.net/en/resources/blog/agentic-payments",
+        "https://www.getnet.net/en/resources/blog/the-future-of-ecommerce"
+      ],
+      "top1_cosine": 0.7438,
+      "recall_at_4": 0.5,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 0.9197
+    },
+    {
+      "id": "Q09",
+      "lang": "en",
+      "query": "Which point of sale terminals are available for physical shops?",
+      "relevant": [
+        "https://www.getnet.net/en/our-solutions/in-person-payments"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/this-is-how-next-gen-payments-can-help-merchants-meet-esg-objectives",
+        "https://www.getnet.net/en/our-solutions/in-person-payments",
+        "https://www.getnet.net/en/resources/client-stories/connects-pascual",
+        "https://www.getnet.net/en/resources/blog/why-retailers-must-treat-payments-as-a-core-strategy"
+      ],
+      "top1_cosine": 0.5561,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 0.5,
+      "ndcg_at_10": 0.6309
+    },
+    {
+      "id": "Q10",
+      "lang": "en",
+      "query": "Is there one API to accept payments in several Latin American countries?",
+      "relevant": [
+        "https://www.getnet.net/en/our-solutions/omnichannel"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/our-solutions/omnichannel",
+        "https://www.getnet.net/en/resources/blog/the-future-of-cross-border-payments-in-latin-america",
+        "https://www.getnet.net/en/resources/blog/what-is-next-for-the-latin-america-payments-ecosystem",
+        "https://www.getnet.net/en/resources/blog/the-mobile-payment-revolution-in-latin-america"
+      ],
+      "top1_cosine": 0.7102,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q11",
+      "lang": "en",
+      "query": "Tools to grow e-commerce sales while preventing payment fraud",
+      "relevant": [
+        "https://www.getnet.net/en/our-solutions/online-payments"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/optimising-your-checkout-process",
+        "https://www.getnet.net/en/corporate/about-us",
+        "https://www.getnet.net/en/our-solutions/online-payments",
+        "https://www.getnet.net/en/resources/whats-new"
+      ],
+      "top1_cosine": 0.6521,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 0.3333,
+      "ndcg_at_10": 0.5
+    },
+    {
+      "id": "Q12",
+      "lang": "en",
+      "query": "Can my business obtain working capital or financing?",
+      "relevant": [
+        "https://www.getnet.net/en/our-solutions/value-added-solutions"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/evolution-of-lending-solution",
+        "https://www.getnet.net/en/our-solutions/value-added-solutions",
+        "https://www.getnet.net/en/resources/blog/top-tips-to-choose-the-right-payments-partner",
+        "https://www.getnet.net/en/resources/blog/why-embedded-finance-is-transforming-fintech"
+      ],
+      "top1_cosine": 0.49,
+      "recall_at_4": 0.0,
+      "mrr_at_10": 0.5,
+      "ndcg_at_10": 0.6309
+    },
+    {
+      "id": "Q13",
+      "lang": "en",
+      "query": "How do I join Getnet's partner ecosystem?",
+      "relevant": [
+        "https://www.getnet.net/en/partners"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/partners",
+        "https://www.getnet.net/en/resources/blog/top-tips-to-choose-the-right-payments-partner",
+        "https://www.getnet.net/en/resources/blog/mexican-travel-industry",
+        "https://www.getnet.net/en/resources/client-stories/connects-pascual"
+      ],
+      "top1_cosine": 0.6686,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q14",
+      "lang": "en",
+      "query": "What should a merchant understand about open banking?",
+      "relevant": [
+        "https://www.getnet.net/en/resources/blog/4-things-every-merchant-needs-to-know-about-open-banking"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/4-things-every-merchant-needs-to-know-about-open-banking",
+        "https://www.getnet.net/en/resources/blog/the-key-fintech-developments-that-shaped-2024",
+        "https://www.getnet.net/en"
+      ],
+      "top1_cosine": 0.7576,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q15",
+      "lang": "en",
+      "query": "Difference between encrypting and tokenising card data",
+      "relevant": [
+        "https://www.getnet.net/en/resources/blog/encryption-vs-tokenisation"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/encryption-vs-tokenisation",
+        "https://www.getnet.net/en/resources/blog/the-role-payments-play-in-elevating-travel-and-tourism",
+        "https://www.getnet.net/en/resources/client-stories/connects-melia"
+      ],
+      "top1_cosine": 0.6406,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q16",
+      "lang": "en",
+      "query": "How is credit for small and medium businesses changing in Latin America?",
+      "relevant": [
+        "https://www.getnet.net/en/resources/blog/evolution-of-lending-solution"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/evolution-of-lending-solution",
+        "https://www.getnet.net/en/resources/blog/what-is-next-for-the-latin-america-payments-ecosystem",
+        "https://www.getnet.net/en/resources/blog/the-mobile-payment-revolution-in-latin-america",
+        "https://www.getnet.net/en/resources/blog/what-do-new-payment-regulations-mean-for-merchants"
+      ],
+      "top1_cosine": 0.7446,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q17",
+      "lang": "en",
+      "query": "Preferred payment methods of consumers in Portugal",
+      "relevant": [
+        "https://www.getnet.net/en/resources/blog/how-people-prefer-to-pay-in-portugal",
+        "https://www.getnet.net/en/resources/blog/the-2025-payments-landscape-in-spain-and-portugal"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/optimising-your-checkout-process",
+        "https://www.getnet.net/en/resources/blog/the-2025-payments-landscape-in-spain-and-portugal",
+        "https://www.getnet.net/en/resources/blog/how-people-prefer-to-pay-in-portugal",
+        "https://www.getnet.net/en/resources/blog/what-is-next-for-the-latin-america-payments-ecosystem"
+      ],
+      "top1_cosine": 0.6581,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 0.5,
+      "ndcg_at_10": 0.6934
+    },
+    {
+      "id": "Q18",
+      "lang": "en",
+      "query": "Most used ways to pay in Mexico",
+      "relevant": [
+        "https://www.getnet.net/en/resources/blog/payment-trends-in-mexico"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/payment-trends-in-mexico",
+        "https://www.getnet.net/en/resources/blog/what-is-next-for-the-latin-america-payments-ecosystem",
+        "https://www.getnet.net/en/resources/blog/the-future-of-digital-payments-in-the-public-transport-industry",
+        "https://www.getnet.net/en/resources/blog/mexican-travel-industry"
+      ],
+      "top1_cosine": 0.7048,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q19",
+      "lang": "en",
+      "query": "How to reduce cart abandonment by improving the checkout",
+      "relevant": [
+        "https://www.getnet.net/en/resources/blog/optimising-your-checkout-process"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/optimising-your-checkout-process",
+        "https://www.getnet.net/en/resources/blog/why-retailers-must-treat-payments-as-a-core-strategy",
+        "https://www.getnet.net/en/resources/blog/retail",
+        "https://www.getnet.net/en/resources/blog/travel-and-tourism"
+      ],
+      "top1_cosine": 0.4322,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q20",
+      "lang": "en",
+      "query": "Outlook for international payments between Latin American countries",
+      "relevant": [
+        "https://www.getnet.net/en/resources/blog/the-future-of-cross-border-payments-in-latin-america"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/the-future-of-cross-border-payments-in-latin-america",
+        "https://www.getnet.net/en/resources/blog/what-is-next-for-the-latin-america-payments-ecosystem",
+        "https://www.getnet.net/en/resources/blog/the-mobile-payment-revolution-in-latin-america",
+        "https://www.getnet.net/en/resources/blog/the-key-fintech-developments-that-shaped-2024"
+      ],
+      "top1_cosine": 0.7651,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q21",
+      "lang": "en",
+      "query": "Growth of mobile wallets and phone payments in Latin America",
+      "relevant": [
+        "https://www.getnet.net/en/resources/blog/the-mobile-payment-revolution-in-latin-america"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/the-mobile-payment-revolution-in-latin-america",
+        "https://www.getnet.net/en/resources/blog/what-is-next-for-the-latin-america-payments-ecosystem",
+        "https://www.getnet.net/en/resources/blog/the-key-fintech-developments-that-shaped-2024",
+        "https://www.getnet.net/en/resources/blog/understanding-generational-shopping-preferences"
+      ],
+      "top1_cosine": 0.8041,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q22",
+      "lang": "en",
+      "query": "Can digital payments help a merchant meet sustainability goals?",
+      "relevant": [
+        "https://www.getnet.net/en/resources/blog/this-is-how-next-gen-payments-can-help-merchants-meet-esg-objectives"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/this-is-how-next-gen-payments-can-help-merchants-meet-esg-objectives",
+        "https://www.getnet.net/en/resources/blog/education-in-the-digital-age-the-adoption-of-digital-payments",
+        "https://www.getnet.net/en/resources/blog/payment-trends-in-mexico",
+        "https://www.getnet.net/en/resources/blog/retail"
+      ],
+      "top1_cosine": 0.6107,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q23",
+      "lang": "en",
+      "query": "Advice for a small business choosing a payments provider",
+      "relevant": [
+        "https://www.getnet.net/en/resources/blog/top-tips-to-choose-the-right-payments-partner"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/top-tips-to-choose-the-right-payments-partner",
+        "https://www.getnet.net/en/resources/blog/retail",
+        "https://www.getnet.net/en/our-solutions/online-payments",
+        "https://www.getnet.net/en"
+      ],
+      "top1_cosine": 0.6445,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q24",
+      "lang": "en",
+      "query": "What is embedded finance and how is it used?",
+      "relevant": [
+        "https://www.getnet.net/en/resources/blog/why-embedded-finance-is-transforming-fintech"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/why-embedded-finance-is-transforming-fintech",
+        "https://www.getnet.net/en/resources/blog/evolution-of-lending-solution"
+      ],
+      "top1_cosine": 0.8821,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q25",
+      "lang": "en",
+      "query": "Impact of new payment regulation on merchants",
+      "relevant": [
+        "https://www.getnet.net/en/resources/blog/what-do-new-payment-regulations-mean-for-merchants"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/what-do-new-payment-regulations-mean-for-merchants",
+        "https://www.getnet.net/en/resources/blog/this-is-how-next-gen-payments-can-help-merchants-meet-esg-objectives",
+        "https://www.getnet.net/en/resources/blog/what-is-next-for-the-latin-america-payments-ecosystem",
+        "https://www.getnet.net/en/resources/blog/payments-infrastructure-will-define-performance-in-the-travel-sector"
+      ],
+      "top1_cosine": 0.6954,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q26",
+      "lang": "en",
+      "query": "Can shoppers pay with Bizum in physical stores?",
+      "relevant": [
+        "https://www.getnet.net/en/resources/client-stories/bizum"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/client-stories/bizum",
+        "https://www.getnet.net/en/resources/blog/the-future-of-ecommerce",
+        "https://www.getnet.net/en/resources/blog/the-2025-payments-landscape-in-spain-and-portugal"
+      ],
+      "top1_cosine": 0.6574,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q27",
+      "lang": "en",
+      "query": "Hotel chain protecting card data with point-to-point encryption",
+      "relevant": [
+        "https://www.getnet.net/en/resources/client-stories/connects-melia"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/payments-infrastructure-will-define-performance-in-the-travel-sector",
+        "https://www.getnet.net/en/resources/client-stories/connects-melia",
+        "https://www.getnet.net/en/resources/blog/the-role-payments-play-in-elevating-travel-and-tourism",
+        "https://www.getnet.net/en/resources/blog/encryption-vs-tokenisation"
+      ],
+      "top1_cosine": 0.6256,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 0.5,
+      "ndcg_at_10": 0.6309
+    },
+    {
+      "id": "Q28",
+      "lang": "en",
+      "query": "Turning delivery drivers' smartphones into card terminals",
+      "relevant": [
+        "https://www.getnet.net/en/resources/client-stories/connects-pascual"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/client-stories/connects-pascual",
+        "https://www.getnet.net/en/resources/blog/travel-and-tourism",
+        "https://www.getnet.net/en/resources/blog/why-retailers-must-treat-payments-as-a-core-strategy",
+        "https://www.getnet.net/en/resources/blog/the-future-of-digital-payments-in-the-public-transport-industry"
+      ],
+      "top1_cosine": 0.5721,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q29",
+      "lang": "en",
+      "query": "Faster food and drink payments for football fans at half-time",
+      "relevant": [
+        "https://www.getnet.net/en/resources/client-stories/zig"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/client-stories/zig",
+        "https://www.getnet.net/en/resources/blog/the-future-of-digital-payments-in-the-public-transport-industry",
+        "https://www.getnet.net/en/resources/blog/health-beauty-payments-in-2026",
+        "https://www.getnet.net/en/resources/whats-new"
+      ],
+      "top1_cosine": 0.483,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q30",
+      "lang": "en",
+      "query": "Payment solutions for bars, restaurants and catering",
+      "relevant": [
+        "https://www.getnet.net/en/your-business/industries/restaurants"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/whats-new",
+        "https://www.getnet.net/en/resources/blog/the-role-payments-play-in-elevating-travel-and-tourism",
+        "https://www.getnet.net/en/your-business/industries/restaurants",
+        "https://www.getnet.net/en/resources/blog/travel-and-tourism"
+      ],
+      "top1_cosine": 0.5719,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 0.3333,
+      "ndcg_at_10": 0.5
+    },
+    {
+      "id": "Q31",
+      "lang": "en",
+      "query": "Payments for hotel stays, flights and travel bookings",
+      "relevant": [
+        "https://www.getnet.net/en/your-business/industries/travel",
+        "https://www.getnet.net/en/resources/blog/payments-infrastructure-will-define-performance-in-the-travel-sector",
+        "https://www.getnet.net/en/resources/blog/the-role-payments-play-in-elevating-travel-and-tourism",
+        "https://www.getnet.net/en/resources/blog/travel-and-tourism"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/payments-infrastructure-will-define-performance-in-the-travel-sector",
+        "https://www.getnet.net/en/your-business/industries/travel",
+        "https://www.getnet.net/en/resources/blog/the-role-payments-play-in-elevating-travel-and-tourism",
+        "https://www.getnet.net/en/resources/blog/travel-and-tourism"
+      ],
+      "top1_cosine": 0.6014,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q32",
+      "lang": "en",
+      "query": "Payment platform for large multinational organisations",
+      "relevant": [
+        "https://www.getnet.net/en/your-business/large-enterprises"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/your-business/large-enterprises",
+        "https://www.getnet.net/en/our-solutions/omnichannel",
+        "https://www.getnet.net/en",
+        "https://www.getnet.net/en/your-business/industries/travel"
+      ],
+      "top1_cosine": 0.711,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q33",
+      "lang": "en",
+      "query": "Preparing a store for Black Friday and Christmas sales",
+      "relevant": [
+        "https://www.getnet.net/en/resources/blog/retail",
+        "https://www.getnet.net/en/resources/blog/understanding-generational-shopping-preferences"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/retail",
+        "https://www.getnet.net/en/resources/blog/understanding-generational-shopping-preferences",
+        "https://www.getnet.net/en/resources/whats-new",
+        "https://www.getnet.net/en/resources/blog/why-retailers-must-treat-payments-as-a-core-strategy"
+      ],
+      "top1_cosine": 0.5766,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q34",
+      "lang": "en",
+      "query": "Contactless fares and digital payments on buses and trains",
+      "relevant": [
+        "https://www.getnet.net/en/resources/blog/the-future-of-digital-payments-in-the-public-transport-industry"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/the-future-of-digital-payments-in-the-public-transport-industry",
+        "https://www.getnet.net/en/resources/blog/travel-and-tourism"
+      ],
+      "top1_cosine": 0.7044,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0
+    },
+    {
+      "id": "Q35",
+      "lang": "es",
+      "query": "¿Cómo contacto con el equipo comercial de Getnet?",
+      "relevant": [
+        "https://www.getnet.net/en/contact"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/whats-new",
+        "https://www.getnet.net/en/resources/client-stories/connects-pascual",
+        "https://www.getnet.net/en/legal/legal-notice",
+        "https://www.getnet.net/en"
+      ],
+      "top1_cosine": 0.5829,
+      "recall_at_4": 0.0,
+      "mrr_at_10": 0.2,
+      "ndcg_at_10": 0.3869
+    },
+    {
+      "id": "Q36",
+      "lang": "es",
+      "query": "¿Qué terminales de pago hay para tiendas físicas?",
+      "relevant": [
+        "https://www.getnet.net/en/our-solutions/in-person-payments"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/the-mobile-payment-revolution-in-latin-america",
+        "https://www.getnet.net/en/legal/relatorio-de-transparencia",
+        "https://www.getnet.net/en/resources/blog/the-future-of-cross-border-payments-in-latin-america",
+        "https://www.getnet.net/en/resources/blog/what-is-next-for-the-latin-america-payments-ecosystem"
+      ],
+      "top1_cosine": 0.3524,
+      "recall_at_4": 0.0,
+      "mrr_at_10": 0.0,
+      "ndcg_at_10": 0.0
+    },
+    {
+      "id": "Q37",
+      "lang": "es",
+      "query": "¿Puedo pedir financiación o capital de trabajo para mi negocio?",
+      "relevant": [
+        "https://www.getnet.net/en/our-solutions/value-added-solutions"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/what-is-next-for-the-latin-america-payments-ecosystem",
+        "https://www.getnet.net/en/resources/blog/the-role-payments-play-in-elevating-travel-and-tourism",
+        "https://www.getnet.net/en/legal/relatorio-de-transparencia",
+        "https://www.getnet.net/en/resources/blog/payment-trends-in-mexico"
+      ],
+      "top1_cosine": 0.4199,
+      "recall_at_4": 0.0,
+      "mrr_at_10": 0.0,
+      "ndcg_at_10": 0.0
+    },
+    {
+      "id": "Q38",
+      "lang": "es",
+      "query": "¿Qué diferencia hay entre cifrado y tokenización?",
+      "relevant": [
+        "https://www.getnet.net/en/resources/blog/encryption-vs-tokenisation"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/legal/relatorio-de-transparencia",
+        "https://www.getnet.net/en/resources/blog/the-role-payments-play-in-elevating-travel-and-tourism",
+        "https://www.getnet.net/en/resources/blog/encryption-vs-tokenisation",
+        "https://www.getnet.net/en/resources/blog/the-mobile-payment-revolution-in-latin-america"
+      ],
+      "top1_cosine": 0.3742,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 0.3333,
+      "ndcg_at_10": 0.5
+    },
+    {
+      "id": "Q39",
+      "lang": "es",
+      "query": "¿Cómo prefieren pagar los consumidores en Portugal?",
+      "relevant": [
+        "https://www.getnet.net/en/resources/blog/how-people-prefer-to-pay-in-portugal",
+        "https://www.getnet.net/en/resources/blog/the-2025-payments-landscape-in-spain-and-portugal"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/the-role-payments-play-in-elevating-travel-and-tourism",
+        "https://www.getnet.net/en/resources/blog/how-people-prefer-to-pay-in-portugal",
+        "https://www.getnet.net/en/legal/relatorio-de-transparencia",
+        "https://www.getnet.net/en/resources/blog/the-2025-payments-landscape-in-spain-and-portugal"
+      ],
+      "top1_cosine": 0.4378,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 0.5,
+      "ndcg_at_10": 0.6509
+    },
+    {
+      "id": "Q40",
+      "lang": "es",
+      "query": "¿Se puede pagar con Bizum en el datáfono de una tienda?",
+      "relevant": [
+        "https://www.getnet.net/en/resources/client-stories/bizum"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/legal/legal-notice",
+        "https://www.getnet.net/en/resources/client-stories/bizum",
+        "https://www.getnet.net/en/resources/blog/the-mobile-payment-revolution-in-latin-america",
+        "https://www.getnet.net/en/legal/relatorio-de-transparencia"
+      ],
+      "top1_cosine": 0.3869,
+      "recall_at_4": 1.0,
+      "mrr_at_10": 0.5,
+      "ndcg_at_10": 0.6309
+    },
+    {
+      "id": "Q41",
+      "lang": "es",
+      "query": "Soluciones de pago para restaurantes y bares",
+      "relevant": [
+        "https://www.getnet.net/en/your-business/industries/restaurants"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/whats-new",
+        "https://www.getnet.net/en/legal/legal-notice",
+        "https://www.getnet.net/en/resources/client-stories",
+        "https://www.getnet.net/en/resources/client-stories/connects-pascual"
+      ],
+      "top1_cosine": 0.3366,
+      "recall_at_4": 0.0,
+      "mrr_at_10": 0.0,
+      "ndcg_at_10": 0.0
+    },
+    {
+      "id": "Q42",
+      "lang": "es",
+      "query": "¿Qué es el comercio agéntico?",
+      "relevant": [
+        "https://www.getnet.net/en/our-solutions/agentic-commerce",
+        "https://www.getnet.net/en/resources/blog/agentic-payments"
+      ],
+      "top_pages": [
+        "https://www.getnet.net/en/legal/legal-notice",
+        "https://www.getnet.net/en/resources/blog/the-mobile-payment-revolution-in-latin-america",
+        "https://www.getnet.net/en/resources/blog/what-is-next-for-the-latin-america-payments-ecosystem",
+        "https://www.getnet.net/en/resources/blog/the-role-payments-play-in-elevating-travel-and-tourism"
+      ],
+      "top1_cosine": 0.3998,
+      "recall_at_4": 0.0,
+      "mrr_at_10": 0.0,
+      "ndcg_at_10": 0.0
+    },
+    {
+      "id": "N01",
+      "lang": "en",
+      "query": "What is the weather forecast for Madrid tomorrow?",
+      "relevant": [],
+      "top_pages": [
+        "https://www.getnet.net/en/legal/relatorio-de-transparencia",
+        "https://www.getnet.net/en/resources/blog/this-is-how-next-gen-payments-can-help-merchants-meet-esg-objectives",
+        "https://www.getnet.net/en/legal/legal-notice",
+        "https://www.getnet.net/en/resources/blog/the-key-fintech-developments-that-shaped-2024"
+      ],
+      "top1_cosine": 0.3069
+    },
+    {
+      "id": "N02",
+      "lang": "en",
+      "query": "How do I cook a traditional Valencian paella?",
+      "relevant": [],
+      "top_pages": [
+        "https://www.getnet.net/en/legal/legal-notice",
+        "https://www.getnet.net/en/resources/blog/travel-and-tourism",
+        "https://www.getnet.net/en/your-business/industries/restaurants",
+        "https://www.getnet.net/en/resources/client-stories/connects-pascual"
+      ],
+      "top1_cosine": 0.276
+    },
+    {
+      "id": "N03",
+      "lang": "en",
+      "query": "Who won the 2022 FIFA World Cup final?",
+      "relevant": [],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/this-is-how-next-gen-payments-can-help-merchants-meet-esg-objectives",
+        "https://www.getnet.net/en/resources/blog/the-key-fintech-developments-that-shaped-2024",
+        "https://www.getnet.net/en/resources/blog/the-mobile-payment-revolution-in-latin-america",
+        "https://www.getnet.net/en/resources/blog/travel-and-tourism"
+      ],
+      "top1_cosine": 0.327
+    },
+    {
+      "id": "N04",
+      "lang": "es",
+      "query": "¿Cómo cambio la contraseña de mi cuenta de Netflix?",
+      "relevant": [],
+      "top_pages": [
+        "https://www.getnet.net/en/legal/legal-notice",
+        "https://www.getnet.net/en/resources/blog/what-is-next-for-the-latin-america-payments-ecosystem",
+        "https://www.getnet.net/en/resources/blog/the-mobile-payment-revolution-in-latin-america",
+        "https://www.getnet.net/en/resources/blog/the-role-payments-play-in-elevating-travel-and-tourism"
+      ],
+      "top1_cosine": 0.3664
+    },
+    {
+      "id": "N05",
+      "lang": "en",
+      "query": "What is the capital city of Australia?",
+      "relevant": [],
+      "top_pages": [
+        "https://www.getnet.net/en/resources/blog/celebrating-getnet-argentina-fourth-anniversary",
+        "https://www.getnet.net/en/resources/blog/what-is-next-for-the-latin-america-payments-ecosystem",
+        "https://www.getnet.net/en/resources/blog/the-role-payments-play-in-elevating-travel-and-tourism",
+        "https://www.getnet.net/en/resources/blog/top-tips-to-choose-the-right-payments-partner"
+      ],
+      "top1_cosine": 0.1689
+    }
+  ]
+}

@@ -10,12 +10,30 @@ API REST de atención al cliente para Getnet, construida con **FastAPI** y un si
 |---|---|---|
 | **Router & Guardrails** | Evalúa el último mensaje, decide `next_node` y bloquea contenido malicioso o tóxico. | Ninguna (salida estructurada) |
 | **Knowledge** | Dudas generales y de productos Getnet, respondidas con RAG sobre la web oficial. | `search_getnet_knowledge` |
-| **Support** | Errores de terminal, pagos y transacciones, y cuenta del usuario. | `check_transaction_status`, `check_terminal_connection` |
+| **Support** | Errores de terminal, pagos y transacciones, y cuenta del usuario. Los reembolsos y las derivaciones pasan por un operador humano (HITL). | `check_transaction_status`, `check_terminal_connection`, `request_refund`, `escalate_to_human` |
 | **Guardrail** | Respuesta fija y segura para los mensajes bloqueados. | Ninguna |
 
-**Stack:** FastAPI · LangGraph · LangChain · Groq (`ChatGroq`) · HuggingFace `all-MiniLM-L6-v2` · FAISS · Docker.
+**Stack:** FastAPI · LangGraph (checkpointer SQLite e `interrupt()`) · LangChain · Groq (`ChatGroq`) · HuggingFace `all-MiniLM-L6-v2` · FAISS · JWT · Docker.
 
 > **Nota sobre el modelo LLM.** El enunciado pide `llama-3.1-70b-versatile`, pero Groq lo retiró el 24/01/2025, y su sustituto, `llama-3.3-70b-versatile`, se retiró el 16/08/2026 en los planes free y developer ([Groq Deprecations](https://console.groq.com/docs/deprecations)). Con ese modelo, la API devolvería error en cada petición. Por eso se usa por defecto el reemplazo oficial, `openai/gpt-oss-120b`, que soporta tool calling. Se puede cambiar con la variable `GROQ_MODEL` sin tocar código.
+
+## Novedades respecto a la versión evaluada
+
+La versión evaluada en V4 está etiquetada como [`v4-evaluated`](https://github.com/Belzebro/multiagent-challenge/tree/v4-evaluated). Cada brecha del feedback se cerró con código, pruebas y evidencia versionada. El plan, las preguntas y las decisiones están en [specs/](specs/).
+
+| Brecha del feedback V4 | Qué se hizo | Evidencia |
+|---|---|---|
+| Tests descritos pero no versionados; sin CI | Suite pytest con Groq simulado en la frontera HTTP. CI en cada push y PR: lint, tests, evaluación de recuperación, build de la imagen y smoke test del contenedor | [tests/](tests/), [ci.yml](.github/workflows/ci.yml), badge de CI |
+| Sin autenticación: la identidad llegaba en el cuerpo | JWT Bearer con roles `merchant` y `operator`. El `user_id` del cuerpo debe coincidir con el `sub` del token | [test_auth.py](tests/test_auth.py), smoke test 401/403 en la CI |
+| `user_id` visible en el esquema de las tools | `InjectedState`: el LLM no ve el parámetro y el runtime lo inyecta desde el token | [test_auth.py](tests/test_auth.py) |
+| Sin memoria entre peticiones | Checkpointer de LangGraph sobre SQLite, `conversation_id` con dueño y ventana de contexto | [test_memory_hitl.py](tests/test_memory_hitl.py) |
+| Sin human-in-the-loop | `interrupt()` en reembolsos y derivaciones, tickets, endpoints de operador y reanudación con `Command(resume=…)` | [test_memory_hitl.py](tests/test_memory_hitl.py) |
+| RAG de una página (7 fragmentos) y sin procedencia | 55 páginas (solo `<main>`, sin plantilla) y 500 fragmentos únicos. `sources` en cada respuesta | [test_rag.py](tests/test_rag.py), [retrieval.md](evals/reports/retrieval.md) |
+| Sin evaluación de recuperación ni semántica | Evaluaciones versionadas de recuperación (en la CI), routing y respuestas (con Groq), con release gate | [evals/](evals/), [evals/reports/](evals/reports/) |
+| Observabilidad básica | `X-Request-ID` en la respuesta y en cada línea de log, usuario seudonimizado, tokens, coste estimado y latencia por turno, y `/health/live` y `/health/ready` | [test_auth.py](tests/test_auth.py), [test_observability.py](tests/test_observability.py) |
+| Dependencias sin versión fija | `requirements.lock` con 104 versiones exactas, que usan Docker y la CI | [requirements.lock](requirements.lock) |
+
+Quedan fuera de esta entrega, por decisión registrada: la colaboración y replanificación entre especialistas, la búsqueda híbrida con umbral de relevancia, el juez LLM y el rate limiting ([DEC-018](specs/decisiones.md#dec-018)).
 
 ## Índice
 
@@ -34,8 +52,10 @@ API REST de atención al cliente para Getnet, construida con **FastAPI** y un si
 .
 ├── main.py              # API FastAPI + grafo LangGraph (agentes, herramientas y RAG)
 ├── tests/               # Suite pytest (Groq simulado en la frontera HTTP)
+├── evals/               # Evaluaciones: datasets, runners, release gate e informes versionados
+├── data/corpus/         # Snapshot del corpus RAG (55 páginas de getnet.net) y su manifest
 ├── specs/               # Specs SDD: especificación, plan, tareas, preguntas y decisiones
-├── scripts/             # Utilidades (regenerar el lockfile)
+├── scripts/             # Ingesta del corpus, tokens de desarrollo y regeneración del lockfile
 ├── .github/workflows/   # CI: lint, tests, build de la imagen y smoke test del contenedor
 ├── requirements.txt     # Dependencias directas
 ├── requirements.lock    # Versiones exactas (Linux x86_64, Python 3.11) que usan Docker y la CI
@@ -174,6 +194,8 @@ Incluye la cabecera `X-Request-ID`, el mismo identificador que aparece en los lo
 | `conversation_id` | Conversación a la que pertenece el turno; se envía en el siguiente mensaje para continuarla. |
 | `status` | `completed`, o `pending_human` si la conversación espera la decisión de un operador. |
 | `ticket_id` | Ticket del operador cuando `status` es `pending_human`; si no, `null`. |
+| `sources` | URLs de las páginas que recuperó el RAG en este turno (procedencia de la respuesta). |
+| `usage` | Tokens de entrada y salida de todas las llamadas al LLM del turno, coste estimado en USD y latencia en ms. |
 
 **Errores:**
 
@@ -246,7 +268,14 @@ curl -s -X POST http://localhost:8000/chat \
 }
 ```
 
-En los dos primeros ejemplos, el texto de `response` lo genera el LLM y variará entre ejecuciones. Los campos `agent` y `tools_used` muestran el recorrido por el grafo. `ticket_id` (`null` en estos ejemplos) se omite por brevedad.
+En los dos primeros ejemplos, el texto de `response` lo genera el LLM y variará entre ejecuciones. Los campos `agent` y `tools_used` muestran el recorrido por el grafo. Por brevedad se omiten `sources`, `usage` y `ticket_id` (`null` en estos ejemplos).
+
+### Salud y observabilidad
+
+- `GET /health/live`: el proceso responde.
+- `GET /health/ready`: el estado persistente (SQLite) responde. Si no hay base de conocimiento, la API sigue lista pero indica `"knowledge_base": "degraded"`. El HEALTHCHECK de Docker usa este endpoint.
+- Cada respuesta lleva `X-Request-ID`, y cada línea de log de esa petición también. Al final de cada turno se registra una línea con el agente, las herramientas, los tokens, el coste estimado y la latencia; el usuario aparece seudonimizado.
+- El coste se estima con los precios que Groq publicó para `openai/gpt-oss-120b` en su lanzamiento (0,15 y 0,75 USD por millón de tokens de entrada y salida). Se cambian con `GROQ_PRICE_INPUT_PER_MTOK` y `GROQ_PRICE_OUTPUT_PER_MTOK`.
 
 ### Conversaciones (memoria)
 
@@ -374,7 +403,12 @@ builder.add_edge("support_tools", "support")
 
 - `tools_condition` (de `langgraph.prebuilt`) devuelve `"tools"` si el último `AIMessage` contiene `tool_calls`, y `END` si no.
 - El nodo de herramientas (`ToolNode` de LangGraph) ejecuta cada llamada, inyecta los argumentos marcados con `InjectedState` (el `user_id` del token) y devuelve un `ToolMessage` con su `tool_call_id`, que permite al LLM asociar cada resultado con su petición (ver [Bonus Challenges](#2-mitigación-de-prompt-injection-en-la-identidad-user_id-en-las-tools)).
-- El bucle termina cuando el agente responde sin pedir más herramientas. Como protección, cada petición se ejecuta con `recursion_limit=12` supersteps (`MAX_GRAPH_STEPS`). Si un agente entrara en bucle, LangGraph cortaría la ejecución y la API devolvería un `500`.
+- El bucle termina cuando el agente responde sin pedir más herramientas. **Está acotado:** tras 3 herramientas en el mismo turno (`MAX_TOOL_CALLS_PER_TURN`), la respuesta final se pide al LLM sin herramientas, con la pregunta y lo que devolvieron las herramientas como texto. La evaluación de respuestas encontró los dos fallos que corrige esto:
+  - un agente que no encontraba un dato buscaba hasta agotar el `recursion_limit`, y la API devolvía un `500`;
+  - con `tool_choice="none"`, Groq devuelve 400 si el modelo intenta igualmente llamar a una herramienta.
+
+  Detalle en [DEC-023](specs/decisiones.md#dec-023).
+- Como última protección, cada petición se ejecuta con `recursion_limit=12` supersteps (`MAX_GRAPH_STEPS`).
 
 ### Ciclo de vida de una petición
 
@@ -403,34 +437,25 @@ Según la documentación de Groq, `openai/gpt-oss-120b` no admite llamadas a her
 
 ```mermaid
 flowchart LR
-    W["getnet.net/en"] -->|WebBaseLoader| D["1 Document<br/>~4.800 caracteres"]
-    D -->|"RecursiveCharacterTextSplitter<br/>800 / 100"| C["7 fragmentos"]
+    S["sitemap de getnet.net<br/>61 páginas /en"] -->|"scripts/ingest.py<br/>WebBaseLoader"| P["55 páginas<br/>solo el contenido de main"]
+    P --> J[("data/corpus<br/>snapshot + manifest")]
+    J -->|"al arrancar"| C["RecursiveCharacterTextSplitter 800 / 100<br/>500 fragmentos únicos"]
     C -->|"all-MiniLM-L6-v2"| V["vectores de 384 dimensiones<br/>normalizados"]
     V --> F[("FAISS IndexFlatL2<br/>en memoria")]
     Q["consulta del agente"] -->|"embedding + top-4"| F
-    F --> T["ToolMessage al LLM"]
+    F --> T["fragmentos numerados con su URL<br/>+ sources en la respuesta"]
 ```
 
-Las cifras se midieron en noviembre de 2026 y dependen del contenido actual de la web.
+Las cifras corresponden al snapshot del 13/11/2026.
 
-### 1. Ingesta con `WebBaseLoader`
+### 1. Ingesta con `WebBaseLoader` ([scripts/ingest.py](scripts/ingest.py))
 
-```python
-loader = WebBaseLoader(
-    GETNET_URL,
-    raise_for_status=True,
-    requests_kwargs={"timeout": 20},
-    bs_get_text_kwargs={"separator": "\n", "strip": True},
-)
-```
-
-- Descarga la página con `requests` y extrae el texto con BeautifulSoup.
-- `raise_for_status=True`: una respuesta 4xx o 5xx lanza un error en lugar de indexar una página de error como si fuera conocimiento.
-- `timeout=20`: una web lenta no bloquea el arranque indefinidamente.
-- `separator="\n"` y `strip=True`: cada nodo de texto queda en su propia línea, sin espacios sobrantes. Esos saltos de línea ayudan después al splitter.
-- El contenido de `<script>` y `<style>` no se incluye. Se verificó que el índice no contiene JavaScript.
-- La variable `USER_AGENT` identifica al cliente en la petición.
-- Resultado: un `Document` con el texto y sus metadatos (`source`, `title`, `description` y `language`).
+- Lee el sitemap de getnet.net y se queda con las páginas en inglés que permite robots.txt (61 el 13/11/2026).
+- `WebBaseLoader.scrape_all()` las descarga a 2 páginas por segundo. Con `raise_for_status=True` una página de error nunca se indexa como conocimiento, y con `continue_on_failure=True` una página rota no detiene la ingesta: queda anotada en `skipped_urls` del manifest. El 13/11 fallaron 6 páginas de casos de cliente.
+- De cada página se toma solo el contenido de `<main>`. Antes de este cambio se midió que entre el 19 % y el 29 % del texto de cada página era menú o pie repetido, y esos fragmentos casi iguales habrían llenado el top-k. Además se eliminan las líneas que aparecen en más del 30 % de las páginas: 92 líneas, como menús, autores del blog o enlaces a artículos relacionados.
+- Resultado: `data/corpus/getnet_en.jsonl` (55 páginas, unos 308 000 caracteres) y `manifest.json`, con la fecha, las URLs, el hash SHA-256 de cada página y la atribución del contenido.
+- **El snapshot se versiona.** Así el índice es reproducible, el arranque no depende de la web y las evaluaciones miden siempre el mismo corpus. Se refresca con `python scripts/ingest.py`.
+- Si el snapshot no existe, la API descarga `https://www.getnet.net/en` en vivo con `WebBaseLoader`, como en la versión original.
 
 ### 2. Fragmentación
 
@@ -438,6 +463,7 @@ loader = WebBaseLoader(
 
 - Un fragmento de 800 caracteres equivale a unos 150-200 tokens, dentro de la ventana de 256 tokens de MiniLM. Así el modelo no trunca ningún fragmento al vectorizarlo.
 - El solapamiento de 100 caracteres conserva el contexto de las ideas que caen en el límite entre dos fragmentos.
+- Se descartan los fragmentos repetidos (mismo texto, ignorando espacios y mayúsculas). Quedan 500 fragmentos únicos, y un test comprueba que no hay duplicados.
 
 ### 3. Embeddings con HuggingFace
 
@@ -453,7 +479,7 @@ HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
 `FAISS.from_documents(chunks, embeddings)` crea dos piezas:
 
-- Un índice **`IndexFlatL2`**, que hace búsqueda exacta por fuerza bruta. Es la opción correcta con pocos vectores; con millones se usaría un índice aproximado, como IVF o HNSW.
+- Un índice **`IndexFlatL2`**, que hace búsqueda exacta por fuerza bruta. Es la opción correcta con 500 vectores; con millones se usaría un índice aproximado, como IVF o HNSW.
 - Un `InMemoryDocstore`, que asocia cada vector con su `Document`.
 
 Como los vectores están normalizados, ordenar por distancia L2 al cuadrado equivale a ordenar por similitud coseno: d² = 2 − 2·cos(θ). A menor distancia, mayor similitud.
@@ -465,24 +491,37 @@ Como los vectores están normalizados, ordenar por distancia L2 al cuadrado equi
 ### 5. Recuperación con la herramienta `search_getnet_knowledge`
 
 ```python
-@tool
-def search_getnet_knowledge(query: str) -> str:
+@tool(response_format="content_and_artifact")
+def search_getnet_knowledge(query: str) -> tuple[str, list[str]]:
     """Busca información oficial en la web de Getnet (...). Escribe la consulta en inglés,
-    porque el contenido indexado está en inglés."""
+    porque el contenido indexado está en inglés. Cada fragmento indica la página de la que procede."""
     docs = _vectorstore.similarity_search(query, k=4)
-    return "\n\n---\n\n".join(doc.page_content for doc in docs)
+    content = "\n\n---\n\n".join(f"[{i}] {title} ({url})\n{text}" ...)  # para el LLM
+    return content, urls  # el artefacto no lo ve el LLM: la API lo devuelve como `sources`
 ```
 
 1. El Knowledge Agent (un LLM con `bind_tools`) formula una consulta. El docstring, que el LLM recibe como descripción de la herramienta, le pide escribirla en inglés: la web y el modelo MiniLM están en inglés, aunque el usuario pregunte en español.
 2. La consulta se vectoriza con el mismo modelo y FAISS devuelve los 4 fragmentos más cercanos.
-3. Los fragmentos vuelven al agente como un `ToolMessage`. El system prompt le obliga a responder solo con esa información, a decir cuándo no la encuentra y a contestar en el idioma del usuario.
+3. Los fragmentos vuelven al agente numerados y con su URL. El system prompt le pide citarlos (`[1]`), responder solo con esa información, decir cuándo no la encuentra y contestar en el idioma del usuario.
+4. **Procedencia.** `/chat` devuelve en `sources` las URLs que recuperó la herramienta en ese turno. Salen del artefacto de la herramienta y no del texto del LLM, así que el modelo no las puede inventar.
+
+### Calidad medida
+
+[Evaluación de recuperación](evals/reports/retrieval.md): 42 consultas, cada una con su página fuente, más 5 sin respuesta en el corpus. No usa LLM y se repite en la CI en cada push.
+
+| Métrica | v4 (solo la home) | Actual |
+|---|---:|---:|
+| Fragmentos indexados | 6 | 500 |
+| recall@4 | 0.012 | **0.810** |
+| MRR@10 | 0.024 | **0.748** |
+| nDCG@10 | 0.015 | **0.774** |
+| recall@4, consultas en inglés / en español | 0.015 / 0.000 | 0.912 / 0.375 |
 
 ### Limitaciones y mejoras del RAG
 
-- Solo se indexa la portada (unos 7 fragmentos), así que la cobertura es limitada. El siguiente paso sería rastrear más páginas con `SitemapLoader` o `RecursiveUrlLoader`.
-- MiniLM está entrenado en inglés. Para buscar directamente con consultas en español convendría un modelo multilingüe, como `paraphrase-multilingual-MiniLM-L12-v2`.
-- El índice se reconstruye en cada arranque. Podría guardarse con `save_local` y `load_local`, o moverse a una base de datos vectorial.
-- No hay umbral de similitud ni reranking. Añadir un `score_threshold`, MMR o un reranker mejoraría la precisión.
+- **Consultas en español.** El recall baja de 0.91 a 0.38, porque MiniLM es monolingüe. Por eso la herramienta pide al agente la consulta en inglés. El siguiente paso es comparar un modelo multilingüe (`paraphrase-multilingual-MiniLM-L12-v2`) con este mismo holdout; el enunciado fija `all-MiniLM-L6-v2`.
+- **Sin umbral de similitud.** Los datos ya permiten fijarlo: el coseno del primer fragmento tiene una media de 0.61 en las consultas con respuesta, y un máximo de 0.37 en las que no la tienen. Queda para la siguiente iteración (RAG-06), junto con la búsqueda híbrida (BM25 con RRF) y, si la evaluación lo justifica, un reranker.
+- **Snapshot.** Hay que refrescarlo cuando cambie la web (`python scripts/ingest.py`) y volver a lanzar las evaluaciones.
 
 ## Bonus Challenges implementados
 
@@ -564,37 +603,38 @@ En producción, los tokens los emitiría un proveedor OIDC y se verificarían co
 
 ### Pirámide de pruebas
 
-| Nivel | Qué valida | LLM | Cuándo |
+| Nivel | Qué valida | LLM | Dónde y cuándo |
 |---|---|---|---|
-| Unitarias | Herramientas, imposición de `user_id`, fallback del router y validación de Pydantic | Ninguno | En cada commit |
-| Integración (orquestación) | El grafo completo a través de HTTP: rutas, bucles ReAct, `lifespan` y errores | Groq simulado | En cada commit |
-| Contrato | La petición que se envía a Groq: modelo, esquema JSON de las herramientas y `tool_choice` forzado | Groq simulado | En cada commit |
-| Smoke E2E | Una petición por ruta contra Groq real, comprobando `agent` y `tools_used` | Real | Antes de desplegar |
-| Evaluación (evals) | Precisión del router y fidelidad de las respuestas del RAG | Real | Cada noche, o al cambiar el modelo o los prompts |
+| Unitarias | JWT, identidad inyectada, corpus sin duplicados, fallback del router y validación de Pydantic | Ninguno | CI, en cada push y PR |
+| Integración (orquestación) | El grafo completo a través de HTTP: rutas, bucles ReAct, memoria, HITL, `lifespan` y errores | Groq simulado | CI, en cada push y PR |
+| Contrato | La petición que se envía a Groq: modelo, esquema JSON de las herramientas, `tool_choice` forzado y ausencia de `user_id` | Groq simulado | CI, en cada push y PR |
+| Contenedor | Build de la imagen, HEALTHCHECK y respuestas 401, 403 y 422 | Ninguno | CI, en cada push y PR |
+| Recuperación | recall@4, MRR@10 y nDCG@10 del RAG con su release gate | Ninguno | CI, en cada push y PR |
+| Routing y respuestas | Decisiones del router y respuestas de extremo a extremo con el modelo real | Groq | A mano, al cambiar modelo, prompts o corpus; informes versionados |
 
 ### Cómo se hicieron las pruebas con mocks
 
 El punto de inyección es `main.llm.async_client`, el objeto sobre el que `langchain-groq` llama a `create(**kwargs)`. Se sustituye por un servidor de Groq falso que responde según la petición que recibe:
 
 - Por las herramientas que ofrece la petición, sabe qué agente llama: `RouteDecision` es el router, `search_getnet_knowledge` es Knowledge y las herramientas de soporte son Support.
-- Por el número de `ToolMessage` del historial, sabe en qué vuelta del bucle ReAct está.
+- Por los `ToolMessage` posteriores al último mensaje del usuario, sabe en qué vuelta del bucle ReAct está dentro del turno actual (la memoria añade turnos anteriores al historial).
 
 ```python
-class FakeGroqCompletions:
+class FakeGroq:  # tests/conftest.py, simplificado
     async def create(self, **kwargs):
         tools = [t["function"]["name"] for t in kwargs.get("tools") or []]
-        n_tool_msgs = sum(m["role"] == "tool" for m in kwargs["messages"])
         if "RouteDecision" in tools:              # router
             return completion(tool_calls=[("RouteDecision", {"next_node": "support", "reason": "test"})])
         if "check_terminal_connection" in tools:  # support
-            if n_tool_msgs == 0:                  # el LLM intenta suplantar a otro usuario
+            if not turn_tools:                    # el LLM intenta suplantar a otro usuario
                 return completion(tool_calls=[("check_terminal_connection", {"user_id": "victim-999"})])
             return completion(content="respuesta final")
         ...
 
-main.llm.async_client = FakeGroqCompletions()   # el resto del sistema es real
-with TestClient(main.app) as client:            # ejecuta el lifespan y construye el RAG
-    r = client.post("/chat", json={"message": "Mi terminal no conecta", "user_id": "user-123"})
+monkeypatch.setattr(main.llm, "async_client", FakeGroq())  # el resto del sistema es real
+with TestClient(main.app) as client:                         # ejecuta el lifespan
+    r = client.post("/chat", headers={"Authorization": f"Bearer {token}"},
+                    json={"message": "Mi terminal no conecta", "user_id": "user-123"})
 ```
 
 `completion(...)` construye una respuesta con el mismo formato JSON que la API de Groq, que es compatible con la de OpenAI.
@@ -630,23 +670,27 @@ Escenarios cubiertos por [tests/test_chat.py](tests/test_chat.py), que la [CI](h
 
 ### Evaluación con el modelo real
 
-Los mocks no pueden medir si el LLM real decide bien. Para eso se usan evaluaciones contra Groq:
+Los mocks no pueden medir si el LLM real decide bien. Para eso están las [evaluaciones](evals/), con datasets, runners e informes versionados, y un release gate ([thresholds.yaml](evals/thresholds.yaml)). Resultados del 13/11/2026 con `openai/gpt-oss-120b`:
 
-- **Router.** Un dataset etiquetado (por ejemplo, `evals/routing.jsonl`, con `{"message", "expected"}`) que incluya:
-  - consultas legítimas;
-  - casos frontera, como "¿cómo funciona el cobro con QR?", que es knowledge y no support;
-  - un corpus adversarial: jailbreaks, extracción del system prompt, suplantación de `user_id` y mensajes tóxicos en varios idiomas.
+| Suite | Resultado | Informe |
+|---|---|---|
+| Recuperación: 42 consultas, sin LLM | recall@4 0.81 (0.01 con el índice de v4), MRR@10 0.75, nDCG@10 0.77 | [retrieval.md](evals/reports/retrieval.md) |
+| Router: 30 mensajes, 12 de ellos ataques | Accuracy 100 %. Bloquea los 12 ataques (inyecciones, jailbreaks, tóxicos y fraude) y ninguna de las 18 consultas legítimas. p50 de 0,58 s y unos 500 tokens por caso | [routing.md](evals/reports/routing.md) |
+| Respuestas de extremo a extremo: 10 preguntas | Sin errores. Enruta bien y recupera la página correcta en las 10. El dato clave y la cita aparecen en 8: en las otras 2, el agente dice que no encontró el dato, sin inventarlo. p50 de 2,3 s y unos 2 900 tokens por caso | [answers.md](evals/reports/answers.md) |
 
-  Se mide la precisión por clase y la matriz de confusión. En `guardrail` se prioriza el *recall*, porque un falso negativo es un riesgo de seguridad y un falso positivo solo una molestia.
-- **Seguridad.** Con la misma batería adversarial, se comprueba que ninguna salida de herramienta contiene un `user_id` distinto del de la petición.
-- **RAG.** Preguntas cuya respuesta está en la web y otras cuya respuesta no está. Se mide la fidelidad al contexto con LLM-as-judge o con RAGAS (*faithfulness* y *answer relevancy*), y se verifica que el agente diga que no lo sabe cuando corresponde.
-- **Cuándo.** Cada noche, y siempre antes de cambiar `GROQ_MODEL` o cualquier prompt, con umbrales mínimos que eviten regresiones.
+La evaluación de respuestas se ejecutó tres veces el 13/11. Las dos primeras encontraron fallos reales que se corrigieron antes de la ejecución final: un bucle de búsquedas sin tope, un 400 de Groq con `tool_choice="none"` y un falso bloqueo del router. También se corrigió un fallo del propio comprobador. Las ejecuciones previas se conservan en [evals/reports/](evals/reports/) ([DEC-023](specs/decisiones.md#dec-023)).
+
+- **Qué se mide y qué no.** La orquestación se prueba con un LLM simulado: si el sistema ejecuta bien una decisión. La calidad se mide con el modelo real: si el router decide bien y si la respuesta usa la página correcta.
+- **Sin juez LLM.** Calibrarlo exige etiquetas expertas que no estaban disponibles ([DEC-011](specs/decisiones.md#dec-011)). Las comprobaciones de respuesta son reglas: ruta, página fuente, dato clave, idioma y citas.
+- **Datasets pequeños**, por el presupuesto del plan gratuito de Groq. Detectan regresiones, pero un 100 % sobre 30 casos no demuestra un router perfecto.
+- **Cuándo.** La recuperación se recalcula en la CI en cada push. Las suites con Groq se lanzan a mano al cambiar el modelo, los prompts o el corpus, y la CI comprueba sus últimos informes contra el gate.
 
 ## Limitaciones y siguientes pasos
 
 - **Estado en SQLite.** La memoria y los tickets viven en un archivo SQLite, suficiente para una instancia. Con varias réplicas se usaría `AsyncPostgresSaver` y una tabla de tickets en Postgres ([DEC-019](specs/decisiones.md#dec-019)).
 - **Identidad.** Los JWT de desarrollo se firman con HS256 y un secreto compartido; en producción los emitiría un proveedor OIDC (RS256 con JWKS). No hay límite de peticiones por usuario: queda fuera de esta entrega ([DEC-018](specs/decisiones.md#dec-018)).
 - **Herramientas de soporte simuladas.** Devuelven datos ficticios. En producción llamarían a los sistemas reales con el `user_id` impuesto.
-- **RAG de una sola página** (ver [Limitaciones y mejoras del RAG](#limitaciones-y-mejoras-del-rag)).
+- **RAG:** consultas en español, umbral de similitud y búsqueda híbrida (ver [Limitaciones y mejoras del RAG](#limitaciones-y-mejoras-del-rag)).
+- **Colaboración entre especialistas.** El router elige un especialista por turno. Un supervisor que encadene Support y Knowledge (por ejemplo, diagnóstico más guía oficial) es el siguiente paso de orquestación ([DEC-018](specs/decisiones.md#dec-018)).
 - **Versiones fijadas.** `requirements.lock` fija las 104 dependencias para Linux x86_64 y Python 3.11, y Docker y la CI instalan desde él. Se regenera con `scripts/lock_requirements.sh` después de cambiar `requirements.txt`.
 - **`langchain-community` en retirada.** El paquete muestra un aviso de deprecación. Se mantiene porque el enunciado pide `WebBaseLoader`, que vive ahí junto con la integración de FAISS; a medio plazo conviene migrar siguiendo la guía oficial de LangChain.
