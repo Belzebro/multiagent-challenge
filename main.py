@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import re
+import time
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -31,9 +32,11 @@ os.environ.setdefault("USER_AGENT", "Mozilla/5.0 (compatible; GetnetMultiAgent/1
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, Path, Request
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_community.vectorstores import FAISS
+from langchain_core.callbacks import get_usage_metadata_callback
 from langchain_core.documents import Document
 from langchain_core.messages import (
     AIMessage,
@@ -91,6 +94,11 @@ USER_ID_PATTERN = r"^[\w.@-]{1,64}$"
 STATE_DB = os.getenv("STATE_DB", "data/state/app.sqlite")
 HISTORY_WINDOW = 20  # mensajes del historial que recibe cada agente
 ID_PATTERN = r"^[0-9a-f]{32}$"  # conversation_id y ticket_id: UUID4 en hexadecimal, generados aquí
+
+# Coste estimado por turno, en USD por millón de tokens. Por defecto, los precios que Groq publicó para
+# openai/gpt-oss-120b en su lanzamiento (agosto de 2025); se cambian sin tocar código.
+PRICE_INPUT_PER_MTOK = float(os.getenv("GROQ_PRICE_INPUT_PER_MTOK", "0.15"))
+PRICE_OUTPUT_PER_MTOK = float(os.getenv("GROQ_PRICE_OUTPUT_PER_MTOK", "0.75"))
 
 # El enunciado pide 'llama-3.1-70b-versatile', pero Groq lo apagó el 24/01/2025 y su sustituto
 # 'llama-3.3-70b-versatile' se apagó el 16/08/2026 (planes free/developer). Por defecto se usa el
@@ -564,6 +572,24 @@ class ChatResponse(BaseModel):
     tools_used: list[str]  # herramientas ejecutadas en este turno, en orden
     sources: list[str] = []  # URLs recuperadas por el RAG en este turno (procedencia de la respuesta)
     ticket_id: str | None = None  # si la conversación queda en espera de un operador
+    usage: "Usage | None" = None  # tokens, coste estimado y latencia del turno
+
+
+class Usage(BaseModel):
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    cost_usd_estimate: float
+    latency_ms: int
+
+
+def turn_usage(by_model: dict, started: float) -> Usage:
+    """Suma los tokens de todas las llamadas al LLM del turno (router y agentes)."""
+    tokens_in = sum(u.get("input_tokens", 0) for u in by_model.values())
+    tokens_out = sum(u.get("output_tokens", 0) for u in by_model.values())
+    cost = (tokens_in * PRICE_INPUT_PER_MTOK + tokens_out * PRICE_OUTPUT_PER_MTOK) / 1_000_000
+    return Usage(input_tokens=tokens_in, output_tokens=tokens_out, total_tokens=tokens_in + tokens_out,
+                 cost_usd_estimate=round(cost, 6), latency_ms=round((time.perf_counter() - started) * 1000))
 
 
 def thread_config(conversation_id: str) -> dict:
@@ -611,12 +637,39 @@ async def chat(request: ChatRequest, principal: Merchant) -> ChatResponse:
         "user_id": principal.sub,  # identidad verificada: es la que reciben las herramientas
         "next_node": "",
     }
+    started = time.perf_counter()
     try:
-        result = await graph.ainvoke(turn_input, thread_config(conversation_id))
-        return await turn_response(result, conversation_id, principal.sub, prior)
+        with get_usage_metadata_callback() as usage:  # tokens de cada llamada al LLM, por modelo
+            result = await graph.ainvoke(turn_input, thread_config(conversation_id))
+        response = await turn_response(result, conversation_id, principal.sub, prior)
     except Exception as exc:
         logger.exception("Error procesando /chat (user=%s)", user_ref(principal.sub))
         raise HTTPException(status_code=500, detail="Error interno al procesar el mensaje.") from exc
+    response.usage = turn_usage(usage.usage_metadata, started)
+    logger.info("Turno %s: agent=%s tools=%s tokens=%d coste=%.6f USD latencia=%d ms (user=%s)",
+                response.status, response.agent, ",".join(response.tools_used) or "-",
+                response.usage.total_tokens, response.usage.cost_usd_estimate, response.usage.latency_ms,
+                user_ref(principal.sub))
+    return response
+
+
+@app.get("/health/live")
+async def health_live() -> dict:
+    """El proceso responde."""
+    return {"status": "ok"}
+
+
+@app.get("/health/ready")
+async def health_ready() -> JSONResponse:
+    """Listo para recibir tráfico: el estado persistente responde. Sin RAG, la API funciona degradada."""
+    try:
+        await (await tickets.conn.execute("SELECT 1")).fetchone()
+        state_db = "ok"
+    except Exception:
+        state_db = "error"
+    body = {"status": "ready" if state_db == "ok" else "not_ready", "state_db": state_db,
+            "knowledge_base": "ready" if _vectorstore is not None else "degraded"}
+    return JSONResponse(body, status_code=200 if state_db == "ok" else 503)
 
 
 class ConversationMessage(BaseModel):
