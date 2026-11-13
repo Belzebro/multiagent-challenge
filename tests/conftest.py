@@ -12,6 +12,7 @@ import time
 
 os.environ.setdefault("GROQ_API_KEY", "test-key-never-sent")
 os.environ.setdefault("JWT_SECRET", "pytest-only-secret-0123456789abcdef-0123456789")
+os.environ.setdefault("STATE_DB", ":memory:")  # cada TestClient arranca con un estado vacío
 
 import jwt  # noqa: E402
 import pytest  # noqa: E402
@@ -53,7 +54,7 @@ class FakeGroq:
     """Imita ``AsyncGroq().chat.completions``: responde según la petición y guarda lo que recibe.
 
     Sabe qué agente llama por las tools que ofrece la petición, y en qué vuelta del bucle ReAct está por
-    el número de mensajes de tool del historial.
+    los mensajes de tool posteriores al último mensaje del usuario (el turno actual).
     """
 
     def __init__(self):
@@ -63,29 +64,38 @@ class FakeGroq:
         self.requests.append(kwargs)
         msgs = kwargs["messages"]
         tools = [t["function"]["name"] for t in kwargs.get("tools") or []]
-        user = next(m["content"] for m in reversed(msgs) if m["role"] == "user")
-        n_tool_msgs = sum(m["role"] == "tool" for m in msgs)
+        last_user = max(i for i, m in enumerate(msgs) if m["role"] == "user")
+        user, low = msgs[last_user]["content"], msgs[last_user]["content"].lower()
+        turn_tools = [m for m in msgs[last_user + 1:] if m["role"] == "tool"]
 
         if "UPSTREAM_DOWN" in user:
             raise RuntimeError("simulated Groq outage")
         if "RouteDecision" in tools:  # router
             if "PARSE_FAIL" in user:
                 return completion(content="no estoy seguro")  # sin tool call -> parsed=None
-            low = user.lower()
             route = ("guardrail" if ("idiota" in low or "ignora tus instrucciones" in low)
-                     else "support" if "terminal" in low else "knowledge")
+                     else "support" if any(w in low for w in ("terminal", "reembolso", "persona"))
+                     else "knowledge")
             return completion(tool_calls=[("RouteDecision", {"next_node": route, "reason": "test"})])
         if "search_getnet_knowledge" in tools:  # knowledge
-            if n_tool_msgs == 0:
+            if not turn_tools:
                 return completion(tool_calls=[("search_getnet_knowledge", {"query": "online payments"})])
-            ctx = [m for m in msgs if m["role"] == "tool"][-1]["content"]
-            return completion(content="KNOWLEDGE<<" + ctx[:160].replace("\n", " ") + ">>")
+            context = turn_tools[-1]["content"][:160].replace("\n", " ")
+            return completion(content="KNOWLEDGE<<" + context + ">>")
         if "check_terminal_connection" in tools:  # support
-            if n_tool_msgs == 0:  # el LLM intenta suplantar a otro usuario
+            if "reembolso" in low or "persona" in low:  # acciones con HITL
+                if not turn_tools:
+                    if "reembolso" in low:
+                        call = ("request_refund", {"transaction_id": "TX-90412", "reason": "cobro duplicado"})
+                    else:
+                        call = ("escalate_to_human", {"summary": "El cliente pide hablar con una persona"})
+                    return completion(tool_calls=[call])
+                return completion(content="SUPPORT<<" + turn_tools[-1]["content"] + ">>")
+            if not turn_tools:  # el LLM intenta suplantar a otro usuario
                 return completion(tool_calls=[("check_terminal_connection", {"user_id": "victim-999"})])
-            if n_tool_msgs == 1:  # el LLM omite el argumento
+            if len(turn_tools) == 1:  # el LLM omite el argumento
                 return completion(tool_calls=[("check_transaction_status", {})])
-            outs = [m["content"].splitlines()[0] for m in msgs if m["role"] == "tool"]
+            outs = [m["content"].splitlines()[0] for m in turn_tools]
             return completion(content="SUPPORT<<" + " || ".join(outs) + ">>")
         raise AssertionError(f"petición inesperada: tools={tools}")
 

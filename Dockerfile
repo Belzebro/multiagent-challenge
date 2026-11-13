@@ -14,8 +14,10 @@ COPY requirements.lock .
 RUN pip install --index-url https://download.pytorch.org/whl/cpu torch==2.15.0 \
  && pip install -r requirements.lock
 
-# 2. Usuario sin privilegios: la API no se ejecuta como root.
-RUN useradd --create-home --no-log-init --uid 10001 appuser
+# 2. Usuario sin privilegios: la API no se ejecuta como root. data/state guarda el SQLite de la
+#    memoria y de los tickets de HITL (en compose, sobre un volumen).
+RUN useradd --create-home --no-log-init --uid 10001 appuser \
+ && mkdir -p /app/data/state && chown -R appuser /app/data
 USER appuser
 
 # 3. Modelo de embeddings incluido en la imagen: el contenedor arranca sin descargar nada

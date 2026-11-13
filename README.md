@@ -159,6 +159,7 @@ TOKEN=$(docker compose exec -T api python scripts/issue_token.py --sub user-123)
 |---|---|---|
 | `message` | string | De 1 a 2000 caracteres. |
 | `user_id` | string | `^[\w.@-]{1,64}$`. Se mantiene por el contrato del enunciado y debe coincidir con el `sub` del token. |
+| `conversation_id` | string, opcional | 32 caracteres hexadecimales. Se omite para empezar una conversación nueva. |
 
 **Respuesta `200`**
 
@@ -169,12 +170,17 @@ Incluye la cabecera `X-Request-ID`, el mismo identificador que aparece en los lo
 | `user_id` | La identidad del token. |
 | `agent` | Nodo que atendió la consulta: `knowledge`, `support` o `guardrail`. Es el valor final de `next_node`. |
 | `response` | Respuesta final del agente. |
-| `tools_used` | Herramientas ejecutadas, en orden. |
+| `tools_used` | Herramientas ejecutadas en este turno, en orden. |
+| `conversation_id` | Conversación a la que pertenece el turno; se envía en el siguiente mensaje para continuarla. |
+| `status` | `completed`, o `pending_human` si la conversación espera la decisión de un operador. |
+| `ticket_id` | Ticket del operador cuando `status` es `pending_human`; si no, `null`. |
 
 **Errores:**
 
 - `401`: falta el token, o es inválido o está caducado.
 - `403`: el rol no es `merchant`, o el `user_id` del cuerpo no coincide con el `sub` del token.
+- `404`: el `conversation_id` no existe o es de otro usuario (no se distingue entre ambos casos).
+- `409`: la conversación está esperando la decisión de un operador.
 - `422`: la petición no supera la validación.
 - `500`: falla el LLM u otro componente. La respuesta es `{"detail": "Error interno al procesar el mensaje."}`; el detalle queda en los logs y nunca se expone al cliente.
 
@@ -192,6 +198,8 @@ curl -s -X POST http://localhost:8000/chat \
 ```json
 {
   "user_id": "user-123",
+  "conversation_id": "9f1c2b7e0a4d4c3e8b6f5a1d2c3e4f5a",
+  "status": "completed",
   "agent": "knowledge",
   "response": "Getnet ofrece pagos presenciales, pagos online y soluciones omnicanal...",
   "tools_used": ["search_getnet_knowledge"]
@@ -210,6 +218,8 @@ curl -s -X POST http://localhost:8000/chat \
 ```json
 {
   "user_id": "user-123",
+  "conversation_id": "9f1c2b7e0a4d4c3e8b6f5a1d2c3e4f5a",
+  "status": "completed",
   "agent": "support",
   "response": "Tu terminal POS-4471 está OFFLINE desde hace 47 minutos (error E-102)...",
   "tools_used": ["check_terminal_connection", "check_transaction_status"]
@@ -228,13 +238,56 @@ curl -s -X POST http://localhost:8000/chat \
 ```json
 {
   "user_id": "user-123",
+  "conversation_id": "9f1c2b7e0a4d4c3e8b6f5a1d2c3e4f5a",
+  "status": "completed",
   "agent": "guardrail",
   "response": "Lo siento, no puedo ayudarte con esa solicitud. Puedo ayudarte con dudas sobre los productos de Getnet o con incidencias de tus pagos, tu terminal o tu cuenta.",
   "tools_used": []
 }
 ```
 
-En los dos primeros ejemplos, el texto de `response` lo genera el LLM y variará entre ejecuciones. Los campos `agent` y `tools_used` muestran el recorrido por el grafo.
+En los dos primeros ejemplos, el texto de `response` lo genera el LLM y variará entre ejecuciones. Los campos `agent` y `tools_used` muestran el recorrido por el grafo. `ticket_id` (`null` en estos ejemplos) se omite por brevedad.
+
+### Conversaciones (memoria)
+
+La primera petición crea una conversación y devuelve su `conversation_id`. Para continuarla, se envía en las peticiones siguientes:
+
+```bash
+curl -s -X POST http://localhost:8000/chat \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"message": "Es el modelo Smart", "user_id": "user-123", "conversation_id": "<conversation_id>"}'
+
+curl -s http://localhost:8000/conversations/<conversation_id> -H "Authorization: Bearer $TOKEN"  # historial
+```
+
+- El historial se guarda con un checkpointer de LangGraph sobre SQLite (`STATE_DB`; en compose, un volumen), así que sobrevive a los reinicios.
+- Cada agente recibe una ventana con los últimos 20 mensajes. El router recibe además la respuesta anterior como contexto, para interpretar mensajes cortos de seguimiento.
+- Solo el dueño de la conversación (el `sub` del token) la puede leer o continuar. Si no es suya o no existe, la API responde 404 en ambos casos, para no revelar qué identificadores existen.
+
+### Supervisión humana (HITL)
+
+Dos acciones del agente de soporte necesitan a una persona:
+
+| Herramienta | Cuándo la usa el agente | Qué decide el operador |
+|---|---|---|
+| `request_refund(transaction_id, reason)` | El cliente pide un reembolso | `approve` o `reject`, con una nota |
+| `escalate_to_human(summary)` | El cliente pide una persona, o no se puede resolver en remoto | `reply`: la respuesta para el cliente |
+
+1. La herramienta llama a `interrupt()`: el grafo se pausa y su estado queda guardado en el checkpoint.
+2. `/chat` responde `status: "pending_human"` con un `ticket_id`. Hasta que se resuelva, la conversación no acepta mensajes nuevos (409).
+3. Un operador (token con `role: operator`) lista los tickets, reclama uno y lo resuelve.
+4. La API reanuda el grafo con `Command(resume=decisión)`: `interrupt()` devuelve la decisión, la herramienta termina y el agente redacta la respuesta final, que queda en la conversación.
+
+```bash
+OPS=$(docker compose exec -T api python scripts/issue_token.py --sub ops-1 --role operator)
+curl -s "http://localhost:8000/operator/tickets?status=pending" -H "Authorization: Bearer $OPS"
+curl -s -X POST http://localhost:8000/operator/tickets/<ticket_id>/claim -H "Authorization: Bearer $OPS"
+curl -s -X POST http://localhost:8000/operator/tickets/<ticket_id>/resolve \
+  -H "Authorization: Bearer $OPS" -H "Content-Type: application/json" \
+  -d '{"decision": "approve", "reply": "Cobro duplicado confirmado"}'
+```
+
+Los cambios de estado del ticket son atómicos: un ticket no se resuelve dos veces (409) ni lo resuelve un operador distinto del que lo reclamó. Los flujos completos están en [tests/test_memory_hitl.py](tests/test_memory_hitl.py).
 
 ## Arquitectura de orquestación
 
@@ -341,7 +394,7 @@ Según la documentación de Groq, `openai/gpt-oss-120b` no admite llamadas a her
 
 ### Decisiones de diseño
 
-- **Grafo compilado una sola vez** al importar el módulo. Cada petición crea un estado nuevo, así que la API no guarda memoria entre peticiones (es *stateless*) y escala horizontalmente sin coordinación. Añadir memoria consistiría en pasar un checkpointer a `compile()` y un `thread_id` a `ainvoke()`.
+- **Grafo compilado una vez, al arrancar,** con un checkpointer de SQLite: cada `conversation_id` es un `thread_id` de LangGraph. El proceso de la API no guarda estado propio; con varias réplicas bastaría con mover el checkpointer y los tickets a Postgres ([DEC-019](specs/decisiones.md#dec-019)).
 - **Asíncrona de extremo a extremo:** el endpoint, `graph.ainvoke` y los nodos son `async`. Las herramientas síncronas (FAISS y embeddings) se ejecutan en un pool de hilos a través de `tool.ainvoke`, sin bloquear el event loop.
 - **Una sola instancia de LLM:** un único `ChatGroq` (`temperature=0`, `timeout=30`, `max_retries=2`), reutilizado con `with_structured_output` en el router y con `bind_tools` en cada agente.
 - **Un worker de uvicorn por contenedor.** Cada worker cargaría su propio modelo y su propio índice. Para escalar se añaden réplicas.
@@ -591,7 +644,7 @@ Los mocks no pueden medir si el LLM real decide bien. Para eso se usan evaluacio
 
 ## Limitaciones y siguientes pasos
 
-- **Sin memoria entre peticiones.** Se puede añadir un checkpointer de LangGraph (`MemorySaver` o uno sobre Postgres) con un `thread_id` por conversación.
+- **Estado en SQLite.** La memoria y los tickets viven en un archivo SQLite, suficiente para una instancia. Con varias réplicas se usaría `AsyncPostgresSaver` y una tabla de tickets en Postgres ([DEC-019](specs/decisiones.md#dec-019)).
 - **Identidad.** Los JWT de desarrollo se firman con HS256 y un secreto compartido; en producción los emitiría un proveedor OIDC (RS256 con JWKS). No hay límite de peticiones por usuario: queda fuera de esta entrega ([DEC-018](specs/decisiones.md#dec-018)).
 - **Herramientas de soporte simuladas.** Devuelven datos ficticios. En producción llamarían a los sistemas reales con el `user_id` impuesto.
 - **RAG de una sola página** (ver [Limitaciones y mejoras del RAG](#limitaciones-y-mejoras-del-rag)).

@@ -9,4 +9,9 @@ services:
       GROQ_API_KEY: "${GROQ_API_KEY:?Falta GROQ_API_KEY. Copia .env.example a .env y rellénala}"
       GROQ_MODEL: "${GROQ_MODEL:-openai/gpt-oss-120b}"
       JWT_SECRET: "${JWT_SECRET:?Falta JWT_SECRET en .env (mínimo 32 caracteres; ver .env.example)}"
+    volumes:
+      - state:/app/data/state  # memoria (checkpoints) y tickets de HITL sobreviven a los reinicios
     restart: unless-stopped
+
+volumes:
+  state:
