@@ -73,7 +73,9 @@ def test_el_bucle_react_se_corta_al_tope_de_herramientas(chat, fake_groq):
     body = r.json()
     assert body["tools_used"] == ["search_getnet_knowledge"] * main.MAX_TOOL_CALLS_PER_TURN
     assert body["response"] == "RESPUESTA_FINAL_SIN_HERRAMIENTAS"
-    assert fake_groq.requests[-1]["tool_choice"] == "none"
+    final = fake_groq.requests[-1]
+    assert not final.get("tools")  # sin herramientas: Groq rechaza tool_choice="none" si el modelo insiste
+    assert "Pregunta que provoca un bucle" in final["messages"][-1]["content"]
 
 
 def test_el_router_solo_tiene_tres_destinos():
