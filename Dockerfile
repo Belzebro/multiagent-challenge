@@ -25,6 +25,7 @@ ENV HF_HUB_OFFLINE=1
 
 # 4. Código al final: cambiar main.py no invalida las capas de dependencias ni del modelo.
 COPY main.py .
+COPY scripts/issue_token.py scripts/
 
 EXPOSE 8000
 
