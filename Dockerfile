@@ -26,8 +26,8 @@ RUN python -c "from sentence_transformers import SentenceTransformer as S; \
 S('all-MiniLM-L6-v2'); S('paraphrase-multilingual-MiniLM-L12-v2')"
 ENV HF_HUB_OFFLINE=1
 
-# 4. Código al final: cambiar main.py no invalida las capas de dependencias ni del modelo.
-COPY main.py .
+# 4. Código al final: cambiar el código no invalida las capas de dependencias ni de los modelos.
+COPY main.py observability.py ./
 COPY scripts/issue_token.py scripts/
 COPY data/corpus/ data/corpus/
 

@@ -42,27 +42,30 @@ La iteración 1 dejó fuera, por decisión registrada, la colaboración y replan
 3. [Uso de la API](#uso-de-la-api)
 4. [Arquitectura de orquestación](#arquitectura-de-orquestación)
 5. [Pipeline RAG](#pipeline-rag)
-6. [Bonus Challenges implementados](#bonus-challenges-implementados)
-7. [Estrategia de pruebas de integración](#estrategia-de-pruebas-de-integración)
-8. [Limitaciones y siguientes pasos](#limitaciones-y-siguientes-pasos)
+6. [Observabilidad](#observabilidad)
+7. [Bonus Challenges implementados](#bonus-challenges-implementados)
+8. [Estrategia de pruebas de integración](#estrategia-de-pruebas-de-integración)
+9. [Limitaciones y siguientes pasos](#limitaciones-y-siguientes-pasos)
 
 ## Estructura del proyecto
 
 ```text
 .
 ├── main.py              # API FastAPI + grafo LangGraph (agentes, herramientas y RAG)
+├── observability.py     # Trazas OpenTelemetry, métricas Prometheus y circuit breaker del LLM
 ├── tests/               # Suite pytest (Groq simulado en la frontera HTTP)
-├── evals/               # Evaluaciones: datasets, runners, release gate e informes versionados
+├── evals/               # Evaluaciones: datasets, juez, calibración, runners, gate e informes versionados
+├── ops/                 # Prometheus (scrape y alertas) y Grafana (datasource y dashboard)
 ├── data/corpus/         # Snapshot del corpus RAG (55 páginas de getnet.net) y su manifest
 ├── specs/               # Specs SDD: especificación, plan, tareas, preguntas y decisiones
 ├── scripts/             # Ingesta del corpus, tokens de desarrollo y regeneración del lockfile
 ├── .github/workflows/   # CI: lint, tests, build de la imagen y smoke test del contenedor
 ├── requirements.txt     # Dependencias directas
 ├── requirements.lock    # Versiones exactas (Linux x86_64, Python 3.11) que usan Docker y la CI
-├── requirements-dev.txt # pytest y ruff
+├── requirements-dev.txt # pytest, ruff y lo que solo usan las evaluaciones (juez y BM25)
 ├── pyproject.toml       # Configuración de ruff y pytest
 ├── Dockerfile           # Imagen basada en python:3.11-slim
-├── docker-compose.yml   # Levanta la API pasando GROQ_API_KEY desde .env
+├── docker-compose.yml   # API; con --profile observability, también Jaeger, Prometheus y Grafana
 ├── .env.example         # Plantilla de configuración
 ├── .dockerignore        # Mantiene secretos y artefactos locales fuera del build
 └── .gitignore
@@ -210,6 +213,7 @@ Incluye la cabecera `X-Request-ID`, el mismo identificador que aparece en los lo
 - `409`: la conversación está esperando la decisión de un operador.
 - `422`: la petición no supera la validación.
 - `500`: falla el LLM u otro componente. La respuesta es `{"detail": "Error interno al procesar el mensaje."}`; el detalle queda en los logs y nunca se expone al cliente.
+- `503`: el circuit breaker del LLM está abierto, tras 3 turnos seguidos con un fallo de Groq. La respuesta llega al instante, sin llamar al modelo, e incluye `Retry-After` con los segundos que faltan; pasados 30 s se deja pasar una petición de prueba ([Observabilidad](#observabilidad)).
 
 ### Ejemplos
 
@@ -275,10 +279,12 @@ curl -s -X POST http://localhost:8000/chat \
 
 En los dos primeros ejemplos, el texto de `response` lo genera el LLM y variará entre ejecuciones. Los campos `agent` y `tools_used` muestran el recorrido por el grafo. Por brevedad se omiten `sources`, `usage` y `ticket_id` (`null` en estos ejemplos).
 
-### Salud y observabilidad
+### Salud, métricas y feedback
 
 - `GET /health/live`: el proceso responde.
 - `GET /health/ready`: el estado persistente (SQLite) responde. Si no hay base de conocimiento, la API sigue lista pero indica `"knowledge_base": "degraded"`. El HEALTHCHECK de Docker usa este endpoint.
+- `GET /metrics`: métricas en formato Prometheus. Si se define `METRICS_TOKEN`, exige `Authorization: Bearer <token>`.
+- `POST /feedback`: valoración de una respuesta por su usuario, con `{"conversation_id": "...", "rating": "up" | "down", "comment": "..."}`. Solo sobre conversaciones propias (`404` si no) y con el token de un `merchant`. Se guarda en el estado persistente y cuenta en la métrica `getnet_feedback_total`; el comentario no se escribe en los logs.
 - Cada respuesta lleva `X-Request-ID`, y cada línea de log de esa petición también. Al final de cada turno se registra una línea con el agente, las herramientas, los tokens, el coste estimado y la latencia; el usuario aparece seudonimizado.
 - El coste se estima con los precios que Groq publicó para `openai/gpt-oss-120b` en su lanzamiento (0,15 y 0,75 USD por millón de tokens de entrada y salida). Se cambian con `GROQ_PRICE_INPUT_PER_MTOK` y `GROQ_PRICE_OUTPUT_PER_MTOK`.
 
@@ -535,6 +541,29 @@ def search(self, query: str, k: int = 4) -> list[Document]:          # Knowledge
 - **Holdout escrito mirando las páginas.** Puede favorecer la coincidencia de vocabulario, y el umbral se calibró con el mismo holdout; la validación cruzada estima cuánto se generaliza.
 - **Sin reranker.** El recall@4 desplegado es de 0.90 y los fallos que quedan son de páginas genéricas (quiénes somos, grandes empresas). Un cross-encoder solo se añadiría si la evaluación de respuestas mostrara que hacen falta.
 - **Snapshot.** Hay que refrescarlo cuando cambie la web (`python scripts/ingest.py`) y volver a lanzar las evaluaciones.
+
+## Observabilidad
+
+```mermaid
+flowchart LR
+    API["API<br/>(observability.py)"] -->|"OTLP/HTTP"| J["Jaeger<br/>trazas"]
+    P["Prometheus<br/>reglas de alerta"] -->|"GET /metrics cada 15 s"| API
+    G["Grafana<br/>dashboard"] --> P
+```
+
+Se arranca con `OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318 docker compose --profile observability up --build`: Jaeger en http://localhost:16686, Prometheus en http://localhost:9090 y Grafana en http://localhost:3000. Sin el perfil, la API no exporta trazas y `/metrics` sigue disponible.
+
+| Pieza | Qué hace | Evidencia |
+|---|---|---|
+| Trazas distribuidas | Un turno es una traza de OpenTelemetry: el span de la petición HTTP y, colgados de él, el grafo, cada nodo, cada llamada al LLM (modelo y tokens) y cada herramienta. Un callback de LangChain construye el árbol con `run_id` y `parent_run_id`, así que los nodos no se tocan. Un `interrupt()` de HITL se marca como pausa, no como error | [test_telemetry.py](tests/test_telemetry.py) |
+| Métricas | Turnos por estado y ruta; latencia de `/chat`, de cada nodo y de cada llamada al LLM en histogramas (p50, p95 y p99 con `histogram_quantile`); errores del LLM; tokens y coste; herramientas por resultado; bloqueos del guardrail; abstenciones del RAG; respuestas de Knowledge sin fuentes; especialistas por turno; veredictos del crítico; tickets pendientes; feedback; estado del circuit breaker | [observability.py](observability.py), `GET /metrics` |
+| Dashboard | 16 paneles en Grafana, aprovisionados al arrancar | [ops/grafana/](ops/grafana/) |
+| Alertas | 10 reglas: API caída, tasa de error, circuito abierto, p95 de latencia, errores del LLM, tickets acumulados, abstención, rechazos del crítico, feedback negativo y coste por hora | [ops/prometheus/alerts.yml](ops/prometheus/alerts.yml), `promtool check config` en la CI |
+| Circuit breaker | Tras 3 turnos seguidos con un fallo del LLM (no cuentan los errores propios de la API), `/chat` y la resolución de tickets responden `503` al instante durante 30 s. Después pasa una sola petición de prueba: si va bien se cierra y, si no, se vuelve a abrir. Se configura con `CIRCUIT_FAILURES` y `CIRCUIT_COOLDOWN_S` | [test_telemetry.py](tests/test_telemetry.py) |
+| Feedback | `POST /feedback` y la métrica `getnet_feedback_total`, con su alerta | [test_telemetry.py](tests/test_telemetry.py) |
+| Carga | En la CI, 40 turnos con 8 en paralelo terminan sin errores y las métricas los cuentan todos. [scripts/load_test.py](scripts/load_test.py) mide p50, p95 y p99 contra una API desplegada | [test_telemetry.py](tests/test_telemetry.py) |
+
+Los tests comprueban también que el dashboard y las alertas solo usan métricas que la API expone de verdad.
 
 ## Bonus Challenges implementados
 

@@ -2,11 +2,18 @@
 # Regenera requirements.lock: resolución exacta de requirements.txt para el entorno del contenedor y de
 # la CI (Linux x86_64, CPython 3.11, torch CPU). Solo resuelve versiones; no instala nada.
 #   Uso: scripts/lock_requirements.sh            (PIP=/ruta/a/pip para usar otro pip)
+#        KEEP_PINS=1 scripts/lock_requirements.sh  conserva las versiones ya fijadas y solo añade las nuevas
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PIP=${PIP:-pip}
 report=$(mktemp)
-trap 'rm -f "$report"' EXIT
+pins=$(mktemp)
+trap 'rm -f "$report" "$pins"' EXIT
+constraints=()
+if [ "${KEEP_PINS:-0}" = "1" ]; then
+  grep '==' requirements.lock > "$pins"
+  constraints=(-c "$pins")
+fi
 
 plat=()
 for v in $(seq 39 -1 17); do plat+=(--platform "manylinux_2_${v}_x86_64"); done
@@ -15,7 +22,7 @@ plat+=(--platform manylinux2014_x86_64 --platform linux_x86_64)
 "$PIP" install --dry-run --ignore-installed --quiet --report "$report" \
   --python-version 3.11 --implementation cp --only-binary=:all: "${plat[@]}" \
   --extra-index-url https://download.pytorch.org/whl/cpu \
-  -r requirements.txt
+  -r requirements.txt ${constraints[@]+"${constraints[@]}"}
 
 python3 - "$report" > requirements.lock <<'EOF'
 import json

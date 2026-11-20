@@ -1,0 +1,81 @@
+# Reglas de alerta de la API multi-agente. Umbrales de partida, para ajustar con el tráfico real.
+groups:
+  - name: getnet-multiagent
+    rules:
+      - alert: GetnetApiCaida
+        expr: up{job="getnet-api"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "Prometheus no puede leer /metrics de la API."
+
+      - alert: GetnetTasaDeErrorAlta
+        expr: >
+          sum(rate(getnet_chat_requests_total{status="error"}[5m]))
+          / sum(rate(getnet_chat_requests_total[5m])) > 0.05
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "Más del 5 % de los turnos de /chat terminan en error."
+
+      - alert: GetnetCircuitoAbierto
+        expr: max(getnet_circuit_open) == 1
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "El circuit breaker del LLM está abierto: /chat responde 503 sin llamar a Groq."
+
+      - alert: GetnetLatenciaP95Alta
+        expr: histogram_quantile(0.95, sum by (le) (rate(getnet_chat_latency_seconds_bucket[5m]))) > 20
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "El p95 de la latencia de /chat supera los 20 s."
+
+      - alert: GetnetErroresDelLLM
+        expr: sum(rate(getnet_llm_errors_total[5m])) * 60 > 3
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "Más de 3 llamadas al LLM fallan por minuto (tras los reintentos del SDK)."
+
+      - alert: GetnetTicketsAcumulados
+        expr: max(getnet_pending_tickets) > 10
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "Más de 10 tickets de HITL esperan a un operador desde hace 15 min."
+
+      - alert: GetnetAbstencionAlta
+        expr: >
+          sum(rate(getnet_rag_abstentions_total[30m]))
+          / sum(rate(getnet_tool_calls_total{tool="search_getnet_knowledge"}[30m])) > 0.4
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "Más del 40 % de las búsquedas no supera el umbral: revisar el índice o el corpus."
+
+      - alert: GetnetCriticoRechaza
+        expr: >
+          sum(rate(getnet_critic_verdicts_total{verdict="delivered_with_issues"}[1h]))
+          / sum(rate(getnet_critic_verdicts_total[1h])) > 0.2
+        for: 1h
+        labels: {severity: warning}
+        annotations:
+          summary: "El crítico rechaza tras la revisión más del 20 % de las síntesis."
+
+      - alert: GetnetFeedbackNegativo
+        expr: >
+          sum(rate(getnet_feedback_total{rating="down"}[1h]))
+          / sum(rate(getnet_feedback_total[1h])) > 0.3
+        for: 1h
+        labels: {severity: warning}
+        annotations:
+          summary: "Más del 30 % de las valoraciones de la última hora son negativas."
+
+      - alert: GetnetCosteAlto
+        expr: sum(rate(getnet_llm_cost_usd_total[1h])) * 3600 > 5
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "El coste estimado del LLM supera los 5 USD por hora."
