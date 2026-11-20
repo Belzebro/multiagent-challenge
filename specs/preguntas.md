@@ -15,12 +15,16 @@ Aquí van las dudas que cambian lo que se construye. Responde debajo de cada una
 | [Q-009](#q-009) | ¿Se versiona el texto público de getnet.net? | Respondida | [DEC-016](decisiones.md#dec-016) |
 | [Q-010](#q-010) | ¿Se aprueban la especificación y el plan? | Respondida | [DEC-018](decisiones.md#dec-018) |
 | [Q-011](#q-011) | Iteración 2: ¿hora límite de la entrega? | Respondida | [DEC-024](decisiones.md#dec-024) |
-| [Q-012](#q-012) | Iteración 2: ¿Groq Developer, o cambiar a Claude? | **Abierta** | [DEC-026](decisiones.md#dec-026), [DEC-028](decisiones.md#dec-028) |
+| [Q-012](#q-012) | Iteración 2: ¿Groq Developer, o cambiar a Claude? | Respondida | [DEC-026](decisiones.md#dec-026), [DEC-033](decisiones.md#dec-033) |
 | [Q-013](#q-013) | Iteración 2: ¿puede el usuario etiquetar unas 40 respuestas? | Respondida | [DEC-029](decisiones.md#dec-029) |
 | [Q-014](#q-014) | Iteración 2: ¿se aprueban los cambios de arquitectura? | Respondida | [DEC-025](decisiones.md#dec-025), [DEC-027](decisiones.md#dec-027) |
 | [Q-015](#q-015) | Iteración 2: ¿ramas, push y merge con la CI en verde? | Respondida | [DEC-030](decisiones.md#dec-030) |
 
 ## Abiertas
+
+Ninguna.
+
+## Respondidas
 
 ### Q-012
 
@@ -32,9 +36,13 @@ Aquí van las dudas que cambian lo que se construye. Responde debajo de cada una
   - **Claude Opus 5.5 como juez independiente.** Se calculan entre 5 y 15 USD, o la mitad con la Batch API.
 - Para usar Claude como juez hace falta una API key de la Consola de Claude (se factura aparte de la suscripción) en `.env` como `ANTHROPIC_API_KEY`.
 
-**Respuesta:**
+**Respuesta (2026-11-20):**
 
-## Respondidas
+- Los agentes siguen en Groq.
+- Groq no permitía subir al plan Developer («temporarily unavailable due to high demand»), así que las evaluaciones usan el mismo modelo a través de OpenRouter.
+- El juez es Claude Opus 5.5.
+
+→ [DEC-033](decisiones.md#dec-033)
 
 ### Q-001
 

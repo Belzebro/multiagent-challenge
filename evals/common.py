@@ -18,7 +18,7 @@ def setup_env() -> None:
     os.environ.setdefault("STATE_DB", ":memory:")
     dotenv = ROOT / ".env"
     lines = dotenv.read_text().splitlines() if dotenv.exists() else []
-    for key in ("GROQ_API_KEY", "ANTHROPIC_API_KEY"):  # el segundo, solo para el juez (evals/judge.py)
+    for key in ("GROQ_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY"):  # juez y proveedor alternativo
         if key not in os.environ:
             for line in lines:
                 if line.startswith(f"{key}="):

@@ -2,7 +2,9 @@
 
 Mide la latencia (p50, p95 y p99), la tasa de error y los 503 del circuit breaker, y deja las métricas
 de /metrics y el dashboard de Grafana con datos. Cada petición llama al LLM real: con el plan gratuito
-de Groq, usa pocas peticiones (p. ej. -n 20 -c 2).
+de Groq, usa pocas peticiones (p. ej. -n 20 -c 2). Todas usan el mismo usuario, así que con el límite
+por defecto (20 turnos por minuto) las siguientes reciben 429: arranca la API con RATE_LIMIT_PER_MINUTE=0
+para medir solo la latencia, o déjalo para comprobar el límite.
 
 Uso: python scripts/load_test.py --url http://localhost:8000 --token "$(python scripts/issue_token.py)" \
        --user user-123 -n 50 -c 5

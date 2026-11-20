@@ -48,7 +48,7 @@ def main(argv: list[str]) -> int:
             dimension = metric.removeprefix("judge_")
             advisory = rule.get("judge") and dimension not in blocking
             status = "OK  " if ok else ("INFO" if advisory else "FALLA")
-            note = " (juez sin calibrar: orientativa)" if advisory else ""
+            note = " (κ del juez < 0.6: orientativa)" if advisory else ""
             print(f"{status} {suite}.{metric} = {'falta' if value is None else value} (umbral {bound}){note}")
             failures += not ok and not advisory
     if failures:

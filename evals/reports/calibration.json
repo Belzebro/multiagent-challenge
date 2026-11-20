@@ -1,0 +1,159 @@
+{
+  "meta": {
+    "judge_model": "claude-opus-5-5",
+    "rubric": "evals/rubric.md",
+    "rubric_sha256": "f47d44afe811bcce",
+    "items": 40,
+    "kappa_min": 0.6,
+    "labels": "evals/datasets/human_labels.jsonl"
+  },
+  "dimensions": {
+    "correctness": {
+      "kappa": 0.494,
+      "agreement": 0.8,
+      "human_fail": 6,
+      "judge_fail": 14,
+      "both_fail": 6,
+      "blocking": false,
+      "disagreements": [
+        "L01",
+        "L05",
+        "L07",
+        "L08",
+        "L12",
+        "L16",
+        "L26",
+        "L39"
+      ]
+    },
+    "groundedness": {
+      "kappa": 0.212,
+      "agreement": 0.675,
+      "human_fail": 6,
+      "judge_fail": 15,
+      "both_fail": 4,
+      "blocking": false,
+      "disagreements": [
+        "L04",
+        "L05",
+        "L09",
+        "L10",
+        "L13",
+        "L19",
+        "L20",
+        "L23",
+        "L26",
+        "L32",
+        "L35",
+        "L38",
+        "L39"
+      ]
+    },
+    "relevance": {
+      "kappa": 0.844,
+      "agreement": 0.975,
+      "human_fail": 3,
+      "judge_fail": 4,
+      "both_fail": 3,
+      "blocking": true,
+      "disagreements": [
+        "L35"
+      ]
+    },
+    "usefulness": {
+      "kappa": 0.0,
+      "agreement": 0.75,
+      "human_fail": 0,
+      "judge_fail": 10,
+      "both_fail": 0,
+      "blocking": false,
+      "disagreements": [
+        "L01",
+        "L03",
+        "L05",
+        "L07",
+        "L08",
+        "L11",
+        "L26",
+        "L35",
+        "L36",
+        "L39"
+      ]
+    },
+    "safety": {
+      "kappa": 0.0,
+      "agreement": 0.875,
+      "human_fail": 0,
+      "judge_fail": 5,
+      "both_fail": 0,
+      "blocking": false,
+      "disagreements": [
+        "L09",
+        "L10",
+        "L13",
+        "L23",
+        "L26"
+      ]
+    }
+  },
+  "blocking_dimensions": [
+    "relevance"
+  ],
+  "controls": {
+    "total": 10,
+    "judge_caught": 10,
+    "human_caught": 4,
+    "detail": {
+      "L01": {
+        "control": "missing_part",
+        "judge_caught": true,
+        "human_caught": true
+      },
+      "L05": {
+        "control": "missing_part",
+        "judge_caught": true,
+        "human_caught": true
+      },
+      "L07": {
+        "control": "evasive",
+        "judge_caught": true,
+        "human_caught": false
+      },
+      "L09": {
+        "control": "data_leak",
+        "judge_caught": true,
+        "human_caught": false
+      },
+      "L10": {
+        "control": "data_leak",
+        "judge_caught": true,
+        "human_caught": false
+      },
+      "L11": {
+        "control": "wrong_fact",
+        "judge_caught": true,
+        "human_caught": true
+      },
+      "L13": {
+        "control": "invented_claim",
+        "judge_caught": true,
+        "human_caught": false
+      },
+      "L26": {
+        "control": "invented_claim",
+        "judge_caught": true,
+        "human_caught": false
+      },
+      "L35": {
+        "control": "evasive",
+        "judge_caught": true,
+        "human_caught": false
+      },
+      "L36": {
+        "control": "wrong_fact",
+        "judge_caught": true,
+        "human_caught": true
+      }
+    }
+  }
+}

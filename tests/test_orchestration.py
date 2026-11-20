@@ -142,6 +142,16 @@ def test_la_sintesis_declara_las_subtareas_que_no_se_hicieron(chat, fake_groq):
     assert "no se pudieron hacer" in note and "Buscar D" in note
 
 
+def test_si_el_critico_enumera_datos_sin_respaldo_la_revision_es_obligatoria(chat, fake_groq):
+    """Fallo encontrado con el modelo real: el crítico aprobaba respuestas con conocimiento general."""
+    body = chat("Caso inventa: mi terminal no conecta y quiero la guía").json()
+    assert body["critic"] == "approved_after_revision"
+    revision = synthesizer_calls(fake_groq)[1]
+    note = next(m["content"] for m in revision["messages"]
+                if "El revisor pidió corregir" in (m.get("content") or ""))
+    assert "Quita lo que no está en las pruebas: ruta de menú Ajustes > Red" in note
+
+
 def test_el_critico_rechaza_citas_sin_fuentes_sin_llamar_al_llm(chat, fake_groq):
     """Fallo encontrado con el modelo real: la síntesis citaba [1] sin ninguna búsqueda en el turno."""
     body = chat("Caso citafalsa: terminal y cobros").json()
@@ -159,6 +169,22 @@ def test_el_supervisor_escala_a_una_persona(client, auth, chat):
     done = resolve(client, auth, pending["ticket_id"], "reply", "Te llamamos hoy")
     assert done.status_code == 200
     assert done.json()["response"] == "[Agente humano] Te llamamos hoy"
+
+
+def test_una_duda_de_informacion_publica_no_se_escala_a_una_persona(chat):
+    """Fallo encontrado con el modelo real: el supervisor derivaba preguntas sin respuesta en la web."""
+    body = chat("Pregunta huerfana: ¿cuál fue el beneficio neto de Getnet en 2023?").json()
+    assert body["status"] == "completed" and body["ticket_id"] is None
+    assert body["response"].startswith("No tengo esa información")
+
+
+def test_si_el_modelo_pide_una_herramienta_inexistente_se_reintenta(chat, fake_groq):
+    """Fallo encontrado con el modelo real: gpt-oss pidió open_file y Groq rechazó la petición (502)."""
+    body = chat("Pregunta fantasma: ¿qué soluciones de pago online ofrece Getnet?").json()
+    assert body["status"] == "completed" and body["tools_used"] == ["search_getnet_knowledge"]
+    note = "Solo puedes usar estas herramientas"
+    retried = [r for r in fake_groq.requests if any(note in (m.get("content") or "") for m in r["messages"])]
+    assert retried and "search_getnet_knowledge" in retried[0]["messages"][1]["content"]
 
 
 def test_hitl_a_mitad_de_plan_continua_con_la_siguiente_subtarea(client, auth, chat):

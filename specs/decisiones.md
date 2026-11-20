@@ -29,13 +29,14 @@ Registro *append-only*: una decisión no se borra; si cambia, se añade otra que
 | [DEC-023](#dec-023) | 2026-11-13 | Correcciones que encontró la evaluación: bucle ReAct acotado, comprobador y router | Aceptada | Técnica, por la evaluación |
 | [DEC-024](#dec-024) | 2026-11-19 | Iteración 2: objetivo 9.5 y entrega antes del 20/11 a las 18:00 | Aceptada | Usuario |
 | [DEC-025](#dec-025) | 2026-11-19 | Orquestación: plan en el router, supervisor, crítico y sintetizador | Aceptada | Usuario y técnica |
-| [DEC-026](#dec-026) | 2026-11-19 | Los agentes siguen en Groq; Claude solo como juez | Propuesta (Q-012) | Técnica |
+| [DEC-026](#dec-026) | 2026-11-19 | Los agentes siguen en Groq; Claude solo como juez | Aceptada (Q-012) | Usuario y técnica |
 | [DEC-027](#dec-027) | 2026-11-19 | RAG multilingüe con un índice adicional fusionado con MiniLM | Aceptada | Usuario y técnica |
-| [DEC-028](#dec-028) | 2026-11-19 | Groq Developer para las evaluaciones del sistema | Propuesta (Q-012) | Técnica |
+| [DEC-028](#dec-028) | 2026-11-19 | Groq Developer para las evaluaciones del sistema | Reemplazada por DEC-033 | Técnica |
 | [DEC-029](#dec-029) | 2026-11-19 | Calibración humana del juez con etiquetas del usuario | Aceptada | Usuario |
 | [DEC-030](#dec-030) | 2026-11-19 | Claude sigue con ramas, push y merge con la CI en verde | Aceptada | Usuario |
 | [DEC-031](#dec-031) | 2026-11-19 | Recuperación por idioma con un MiniLM multilingüe, umbral 0.42 y sin BM25 | Aceptada | Técnica |
 | [DEC-032](#dec-032) | 2026-11-19 | Estado en Postgres opcional, límite de uso en la base compartida, OIDC con JWKS y resumen de memoria | Aceptada | Técnica |
+| [DEC-033](#dec-033) | 2026-11-20 | Evaluaciones con el mismo modelo vía OpenRouter y juez Claude Opus 5.5 | Aceptada | Usuario y técnica |
 
 ---
 
@@ -235,7 +236,7 @@ Estado: **Reemplazada por [DEC-018](#dec-018)** (aprobada en [Q-010](preguntas.m
 
 ### DEC-026
 
-Estado: **Propuesta**, pendiente de [Q-012](preguntas.md#q-012).
+Estado: **aceptada** el 2026-11-20 ([Q-012](preguntas.md#q-012)); las evaluaciones van por OpenRouter ([DEC-033](#dec-033)).
 
 **Los agentes siguen usando `ChatGroq`; Claude (Opus 5.5) se usa solo como juez independiente en `evals/`.**
 
@@ -257,7 +258,7 @@ Estado: **Propuesta**, pendiente de [Q-012](preguntas.md#q-012).
 
 ### DEC-028
 
-Estado: **Propuesta**, pendiente de [Q-012](preguntas.md#q-012).
+Estado: **reemplazada por [DEC-033](#dec-033)**: Groq no permitía subir al plan Developer.
 
 **Groq Developer (pago por uso) para las evaluaciones del sistema.**
 
@@ -303,3 +304,19 @@ Estado: **Propuesta**, pendiente de [Q-012](preguntas.md#q-012).
 - **OIDC con JWKS (RS256),** con PyJWT y la caché de claves de `PyJWKClient`. HS256 queda solo para desarrollo, y cada modo acepta un único algoritmo para evitar la confusión de algoritmos.
 - **Resumen incremental** cuando hay más de 30 mensajes sin resumir. Se ejecuta en paralelo con el router y deja completos los 20 últimos.
 - **Test de réplicas.** Dos instancias con conexiones propias en un mismo proceso, contra el Postgres de servicio de la CI. Desplegar procesos separados tras un balanceador no aporta más evidencia sobre el estado compartido y costaría bastante más.
+
+### DEC-033
+
+**Las evaluaciones con el modelo real usan OpenRouter con el mismo modelo, `openai/gpt-oss-120b`, y el juez es Claude Opus 5.5 ([Q-012](preguntas.md#q-012)).**
+
+- Contexto: el 20/11/2026 Groq no permitía subir al plan Developer («temporarily unavailable due to high demand»). El plan gratuito da unos 200K tokens al día, y una sola pasada completa necesita unos 650K.
+- Decisión:
+  - Los agentes siguen en `ChatGroq` y `main.py` no cambia.
+  - Solo en `evals/`, el cliente HTTP de `ChatGroq` se sustituye por uno que envía las mismas peticiones a OpenRouter ([evals/providers.py](../evals/providers.py)), igual que el Groq simulado de los tests.
+  - OpenRouter prefiere a Groq como proveedor subyacente y, si no tiene capacidad, usa otro que sirva el mismo modelo. Cada informe registra qué proveedores respondieron.
+- Alternativas descartadas:
+  - Pasar los agentes a Claude: rompe el contrato del enunciado ([DEC-026](#dec-026)).
+  - Evaluar en el plan gratuito: no da para las 3 pasadas.
+- Consecuencias:
+  - Coste estimado: menos de 2 USD de OpenRouter y unos 11–13 USD de juez.
+  - El juez es Opus en lugar de Sonnet, por decisión del usuario, para tener el mejor acuerdo posible con las etiquetas humanas.

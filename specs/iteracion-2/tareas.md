@@ -37,12 +37,17 @@ Evidencia: [evals/reports/retrieval.md](../../evals/reports/retrieval.md), las p
 
 ## F13: evaluación (A)
 
-- [ ] **T-130** Datasets: golden set (≥ 40 + 5 sin respuesta), 15 consultas mixtas y 80 mensajes de routing. → EVAL2-01, EVAL2-02
-- [ ] **T-131** Juez independiente con rúbrica versionada. → EVAL2-03
-- [ ] **T-132** Página de etiquetado y cálculo del κ de Cohen por dimensión. → EVAL2-04
-- [ ] **T-133** Tres pasadas por suite, con media, desviación y casos inestables. → EVAL2-05
-- [ ] **T-134** Evaluación de orquestación: plan, cobertura, crítico, latencia y tokens frente a v5. → EVAL2-06
-- [ ] **T-135** Gate actualizado (dimensiones del juez con κ ≥ 0.6) e informes versionados. → EVAL2-03 a EVAL2-06
+Evidencia: [evals/reports/system.md](../../evals/reports/system.md), [system_baseline.md](../../evals/reports/system_baseline.md), [routing.md](../../evals/reports/routing.md), [calibration.md](../../evals/reports/calibration.md), las ejecuciones previas [system_run1.md](../../evals/reports/system_run1.md) y [system_run2.md](../../evals/reports/system_run2.md), y [DEC-033](../decisiones.md#dec-033).
+
+- [x] **T-130** Datasets: golden set de 47 preguntas (41 con respuesta, 21 en español, y 6 sin ella), 15 consultas mixtas y 82 mensajes de routing (42 ataques en 6 idiomas). → EVAL2-01, EVAL2-02
+- [x] **T-131** Juez Claude Opus 5.5 con rúbrica versionada de cinco dimensiones (correcta, respaldada, responde a todo, útil y segura). → EVAL2-03
+- [x] **T-132** Página de etiquetado (artifact privado, solo escribe la propietaria) con 30 respuestas reales y 10 controles con un fallo conocido; κ de Cohen por dimensión. → EVAL2-04
+- [x] **T-133** 3 pasadas por suite con el modelo real, con media, desviación y casos inestables. → EVAL2-05
+- [x] **T-134** Orquestación frente a un solo especialista (`ORCHESTRATION=off`, como v5): cobertura, juez, latencia, tokens y coste. → EVAL2-06
+- [x] **T-135** Gate con los umbrales del sistema y del router de la ejecución final; las dimensiones del juez solo bloquean con κ ≥ 0.6. → EVAL2-03 a EVAL2-06
+- [x] **T-136** Fallos encontrados por las evaluaciones y corregidos con su test: idioma de la síntesis, pasos inventados por Support, herramienta inexistente pedida por gpt-oss, escalado de preguntas públicas, inyección con etiquetas de rol, y comprobación de abstención y bucle del router en el arnés. → EVAL2-05
+- [x] **T-137** Calibración con las 40 etiquetas humanas: κ de 0.84 en «responde a todo», que bloquea el gate; correcta 0.49, respaldada 0.21, útil y segura 0, que se informan. El juez detecta los 10 controles y la persona, 4. → EVAL2-04
+- [x] **T-138** Fallo encontrado por el etiquetado humano: el formato de cita interno de gpt-oss (`【1†L1-L7】`) salía en 120 de 186 respuestas. La API, el historial y los runners lo normalizan a `[1]`, con test; aplicado a las respuestas grabadas, no cambia ninguna comprobación. → EVAL2-05
 
 ## F14: observabilidad (B)
 
@@ -65,6 +70,6 @@ Evidencia: [tests/test_postgres.py](../../tests/test_postgres.py), [tests/test_p
 
 ## F16: cierre (A)
 
-- [ ] **T-160** README: novedades de la iteración 2 y tabla que relaciona cada paso del patrón con su evidencia.
-- [ ] **T-161** Specs al día e informes finales.
-- [ ] **T-162** Tag `v6-reevaluacion` con la CI de `main` en verde.
+- [x] **T-160** README: novedades de la iteración 2 (brecha → qué se hizo → evidencia), tabla patrón → test y resultados con el modelo real.
+- [x] **T-161** Specs al día (Q-012, DEC-031 a DEC-033) e informes finales versionados.
+- [x] **T-162** Tag `v6-reevaluacion` con la CI de `main` en verde.

@@ -118,6 +118,9 @@ class FakeGroq:
         if "SupervisorDecision" in tools:
             return self.supervisor(low, system)
         if "CriticVerdict" in tools:
+            if "inventa" in low and "SINTESIS_REVISADA" not in system:  # aprueba, pero lista datos sin apoyo
+                verdict = {"verdict": "approve", "unsupported": ["ruta de menú Ajustes > Red"]}
+                return completion(tool_calls=[("CriticVerdict", verdict)])
             revise = "rechazo" in low or ("critica" in low and "SINTESIS_REVISADA" not in system)
             verdict = {"verdict": "revise", "issues": "falta citar la fuente"} if revise else {}
             return completion(tool_calls=[("CriticVerdict", verdict or {"verdict": "approve"})])
@@ -132,11 +135,20 @@ class FakeGroq:
             label = "SINTESIS_REVISADA" if revised else "SINTESIS"
             return completion(content=f"{label}<<{'+'.join(agents)}>>{invented}")
         if "search_getnet_knowledge" in tools:  # knowledge
+            if "fantasma" in low and "Solo puedes usar estas herramientas" not in system:
+                raise RuntimeError("Error code: 502 - Upstream error from Groq: Tool call validation failed: "
+                                   "attempted to call tool 'open_file' which was not in request.tools")
+            if "huerfana" in low:  # pregunta sin respuesta en la web: la búsqueda se abstiene
+                if not turn_tools:
+                    return completion(tool_calls=[("search_getnet_knowledge", {"query": "receta de paella"})])
+                return completion(content="No tengo esa información; contacta con el equipo comercial.")
             if "bucle" in low:  # el LLM no deja de buscar
                 query = {"query": f"intento {len(turn_tools)}"}
                 return completion(tool_calls=[("search_getnet_knowledge", query)])
             if not turn_tools:
                 return completion(tool_calls=[("search_getnet_knowledge", {"query": "online payments"})])
+            if "marcas" in low:  # gpt-oss cita con su formato interno en lugar de [1]
+                return completion(content="Getnet ofrece pagos online【1†L1-L4】 y TPV【2】 (ver 【Guía】).")
             context = turn_tools[-1]["content"][:160].replace("\n", " ")
             return completion(content="KNOWLEDGE<<" + context + ">>")
         if "check_terminal_connection" in tools:  # support
@@ -164,7 +176,7 @@ class FakeGroq:
 
         if "bucle" in low:
             return decide("finish")
-        if "escalar" in low:
+        if "escalar" in low or "huerfana" in low:
             return decide("escalate")
         if "saltos" in low:  # cada vez pide una subtarea nueva al otro especialista: lo corta el tope
             done = re.findall(r"^- (knowledge|support) ·", system, re.MULTILINE)

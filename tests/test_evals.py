@@ -9,6 +9,8 @@ import pytest
 from evals import calibrate, run_system
 from evals.judge import DIMENSIONS, Dimension, Judge, JudgeVerdict, passes, render_item
 
+QUESTION_ES = "¿Qué soluciones de pago online ofrece Getnet?"
+
 
 class FakeAnthropic:
     """Imita `AsyncAnthropic().messages.parse`: devuelve un veredicto fijo y guarda las peticiones."""
@@ -39,6 +41,12 @@ def test_el_idioma_de_la_respuesta_se_detecta(text, lang):
     "No tengo información sobre la comisión exacta; te recomiendo contactar con Getnet.",
     "I couldn't find that information in Getnet's website.",
     "Não encontrei essa informação no site da Getnet.",
+    # Formas reales de las ejecuciones con el modelo real (la primera regla no las reconocía)
+    "No he encontrado información sobre la comisión exacta que Getnet cobra en México.",
+    "No se encontró información sobre el beneficio neto de Getnet en 2023.",
+    "I’m sorry, but I wasn’t able to locate any information about Getnet’s net profit.",
+    "I’m sorry, but the information I have does not include Getnet’s net profit for 2023.",
+    "Não foi encontrada informação sobre o custo mensal do aluguel de uma maquininha.",
 ])
 def test_la_abstencion_se_reconoce_en_tres_idiomas(text):
     assert run_system.ABSTENTION.search(text)
@@ -72,7 +80,9 @@ def test_el_juez_envia_la_rubrica_y_el_caso_y_cuenta_el_coste():
     assert passes(verdict, "correctness") and passes(verdict, "groundedness") is False
     request = client.requests[0]
     assert request["model"] == "claude-opus-5-5" and request["output_format"] is JudgeVerdict
-    assert "Rúbrica del juez" in request["system"] and "<evidence>" in request["messages"][0]["content"]
+    assert "Rúbrica del juez" in request["system"][0]["text"]
+    assert "<evidence>" in request["messages"][0]["content"]
+    assert request["system"][0]["cache_control"] == {"type": "ephemeral"}
     assert judge.usage == {"calls": 1, "input_tokens": 1000, "output_tokens": 200}
     assert judge.cost_usd() == 0.008  # 1000 × 4 + 200 × 20 por millón
 
@@ -129,6 +139,26 @@ def test_run_system_de_extremo_a_extremo(fake_groq, offline_kb, monkeypatch):
         "judge_usage": None, "cases": rows})
 
 
+def test_judge_existing_juzga_solo_lo_que_falta_y_reescribe_el_informe(fake_groq, offline_kb, monkeypatch,
+                                                                      tmp_path):
+    monkeypatch.setattr(run_system, "REPORTS", tmp_path)
+    monkeypatch.setattr(run_system, "Judge", lambda: Judge(client=FakeAnthropic()))
+    monkeypatch.setattr(run_system, "write_report",
+                        lambda name, report, md: (tmp_path / f"{name}.json").write_text(json.dumps(report)))
+    case = {"id": "A01", "suite": "golden", "type": "answerable", "lang": "es", "question": QUESTION_ES,
+            "source": "https://www.getnet.net/en/our-solutions/online-payments", "facts_any": ["online"]}
+    rows, _ = asyncio.run(run_system.run_all([case], runs=1, concurrency=1, pace=0, use_judge=False))
+    meta = {"name": "system", "runs": 1, "generated_at": "t", "git_commit": "c", "model": "m",
+            "orchestration": "on", "judge": None}
+    report = {"meta": meta, "cases": rows, "judge_usage": None}
+    (tmp_path / "system.json").write_text(json.dumps(report))
+    run_system.judge_existing("system")
+    saved = json.loads((tmp_path / "system.json").read_text())
+    assert saved["summary"]["judge_all"] == 1.0 and saved["judge_usage"]["calls"] == 1
+    run_system.judge_existing("system")  # nada pendiente: no vuelve a llamar
+    assert json.loads((tmp_path / "system.json").read_text())["judge_usage"]["calls"] == 1
+
+
 def test_un_caso_que_cambia_entre_pasadas_es_inestable():
     base = {"id": "A01", "status": "completed", "judge": None}
     rows = [{**base, "run": 1, "checks": {"fact": True}}, {**base, "run": 2, "checks": {"fact": False}}]
@@ -153,3 +183,24 @@ def test_el_gate_solo_bloquea_con_dimensiones_del_juez_calibradas(tmp_path, monk
     assert gate.main([f"system={report}", f"calibration={calibration}"]) == 1  # calibrada: bloquea
     report.write_text(json.dumps({"summary": {"judge_groundedness": 0.95}}))  # falta errors
     assert gate.main([f"system={report}", f"calibration={calibration}"]) == 1
+
+
+# --- Proveedor alternativo de las evaluaciones --------------------------------------------------------
+def test_openrouter_recibe_los_mismos_mensajes_sin_parametros_propios_de_groq(monkeypatch):
+    from evals.providers import OpenRouterTransport
+
+    transport = OpenRouterTransport("sk-or-test", prefer=("groq",))
+    sent = {}
+
+    async def create(**kwargs):
+        sent.update(kwargs)
+        return SimpleNamespace(model_dump=lambda: {"provider": "Groq", "choices": [], "usage": {}})
+
+    monkeypatch.setattr(transport.client.chat.completions, "create", create)
+    messages = [{"role": "user", "content": "x"}]
+    data = asyncio.run(transport.create(model="openai/gpt-oss-120b", messages=messages, reasoning_format=None,
+                                        service_tier=None, temperature=0, tools=[]))
+    assert data["provider"] == "Groq" and transport.served_by == {"Groq": 1}
+    assert "reasoning_format" not in sent and "service_tier" not in sent  # nulos y propios de Groq fuera
+    assert sent["model"] == "openai/gpt-oss-120b" and sent["temperature"] == 0
+    assert sent["extra_body"] == {"provider": {"order": ["groq"], "allow_fallbacks": True}}

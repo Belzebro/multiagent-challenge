@@ -55,7 +55,7 @@ async def run(cases: list[dict], pace: float) -> tuple[list[dict], dict]:
             start = time.perf_counter()
             try:
                 result = await graph.ainvoke(state, {"recursion_limit": main.MAX_GRAPH_STEPS})
-                answer = result["messages"][-1].text
+                answer = main.clean_citations(result["messages"][-1].text)  # lo que entrega la API
                 sources = list(dict.fromkeys(
                     url for m in result["messages"] if isinstance(m, ToolMessage)
                     and m.name == "search_getnet_knowledge" for url in m.artifact or []))

@@ -1,5 +1,6 @@
 """Producción, seguridad y memoria (iteración 2): rate limiting, OIDC con JWKS y resumen de conversaciones."""
 
+import asyncio
 import json
 import time
 
@@ -7,6 +8,7 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.algorithms import RSAAlgorithm
+from langchain_core.messages import HumanMessage
 
 import main
 
@@ -108,6 +110,16 @@ def test_una_conversacion_larga_se_resume_y_los_agentes_reciben_el_resumen(clien
     # Lo antiguo no se pierde: el historial completo sigue en la conversación
     view = client.get(f"/conversations/{conversation}", headers=auth()).json()
     assert len([m for m in view["messages"] if m["role"] == "user"]) == 9
+
+
+def test_si_el_resumen_falla_el_turno_sigue_con_los_mensajes_recientes(monkeypatch):
+    class Down:  # Groq caído, en la misma frontera HTTP que el Groq simulado
+        async def create(self, **kwargs):
+            raise RuntimeError("Groq no responde")
+
+    monkeypatch.setattr(main.llm, "async_client", Down())
+    state = {"messages": [HumanMessage(content=str(i)) for i in range(40)], "summarized": 0}
+    assert asyncio.run(main.summarize_if_needed(state)) == {}
 
 
 def test_sin_conversacion_larga_no_hay_resumen(chat, fake_groq):

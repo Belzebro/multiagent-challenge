@@ -32,15 +32,19 @@ from langgraph.checkpoint.memory import InMemorySaver  # noqa: E402
 
 import main  # noqa: E402
 from evals.judge import DIMENSIONS, Judge, passes, rubric_metadata  # noqa: E402
+from evals.providers import provider_metadata, use_provider  # noqa: E402
 
 SUITES = {"golden": "golden.jsonl", "mixed": "mixed.jsonl"}
 DASHES = re.compile(r"[‐-―−]")  # guiones Unicode (gpt-oss usa el no separable, U+2011)
-ABSTENTION = re.compile(
-    r"no (tengo|dispongo|encuentro|encontr[ée]|aparece|figura|consta|hay (datos|información))|"
-    r"no est[áa] disponible|sin (datos|información)|"
-    r"(don't|do not|couldn't|could not|can't|cannot) (have|find)|not (available|mentioned|found)|"
+ABSTENTION = re.compile(  # formas reales de abstención vistas en las ejecuciones del 20/11/2026
+    r"no (he|hemos) encontrado|no se (ha )?encontr|no (tengo|dispongo|cuento con)|no aparece|no figura|"
+    r"no consta|no hay (datos|información)|no está disponible|sin (datos|información)|"
+    r"(información|documentación) (disponible |consultada )?no (incluye|contiene|menciona)|"
+    r"(don['’]t|do not|couldn['’]t|could not|can['’]t|cannot|wasn['’]t able to|was not able to|unable to) "
+    r"(have|find|locate)|not (available|mentioned|found|included)|does not (include|contain|mention)|"
     r"no (information|data) (about|on)|"
-    r"não (tenho|encontrei|encontro|há (dados|informação)|está disponível|consta)", re.IGNORECASE)
+    r"não (tenho|encontrei|encontro|há (dados|informação)|está disponível|consta)|não foi encontrad|"
+    r"não (inclui|contém)", re.IGNORECASE)
 PT_WORDS = frozenset("não você vocês são também pelo pela às isso esse essa é uma com em dos das nos nas "
                      "ao aos seu sua muito foi".split())
 ES_WORDS = frozenset("el los del también pero muy está son una con en las según usted puede hay es fue "
@@ -132,7 +136,7 @@ async def run_case(graph, case: dict, run: int, semaphore: asyncio.Semaphore, pa
         messages = result["messages"]
         row.update(
             status="pending_human" if paused else "completed",
-            answer="" if paused else messages[-1].text,
+            answer="" if paused else main.clean_citations(messages[-1].text),  # lo que entrega la API
             sources=list(dict.fromkeys(url for m in messages if isinstance(m, ToolMessage)
                                        and m.name == "search_getnet_knowledge" for url in m.artifact or [])),
             evidence=main.turn_evidence({"messages": messages}),
@@ -298,8 +302,9 @@ def markdown(report: dict) -> str:
     lines = [
         f"# Evaluación del sistema ({meta['name']})",
         "",
-        f"`{meta['generated_at']}` · commit `{meta['git_commit']}` · modelo `{meta['model']}` · "
-        f"orquestación `{meta['orchestration']}` · {meta['runs']} pasadas · juez "
+        f"`{meta['generated_at']}` · commit `{meta['git_commit']}` · modelo `{meta['model']}` vía "
+        f"`{(meta.get('llm') or {}).get('provider', 'groq')}` · orquestación `{meta['orchestration']}` · "
+        f"{meta['runs']} pasadas · juez "
         f"`{judge.get('judge_model', 'sin juez')}` (rúbrica `{judge.get('rubric_sha256', '-')}`)",
         "",
         "Cada métrica es la media de las pasadas ± su desviación típica. Las comprobaciones son "
@@ -339,18 +344,66 @@ def markdown(report: dict) -> str:
     return "\n".join(lines)
 
 
-async def run_all(cases: list[dict], runs: int, concurrency: int, pace: float, use_judge: bool):
+async def run_all(cases: list[dict], runs: int, concurrency: int, pace: float, use_judge: bool,
+                  partial: Path | None = None):
+    """Pasadas en secuencia; el juez de cada pasada trabaja mientras se genera la siguiente.
+
+    Tras generar cada pasada, guarda en `partial` las filas que lleva (con los veredictos que haya): así
+    el conjunto de etiquetado se puede preparar con la primera pasada sin esperar a las demás."""
     main._knowledge = await asyncio.to_thread(main.build_knowledge_base)
     graph = main.build_graph(InMemorySaver())  # checkpointer en memoria: los HITL se pueden pausar
     judge = Judge() if use_judge else None
     semaphore = asyncio.Semaphore(concurrency)
-    rows = []
+    rows, judging = [], []
     for run in range(1, runs + 1):
         run_rows = await asyncio.gather(*(run_case(graph, c, run, semaphore, pace) for c in cases))
-        if judge:
-            await judge_rows(judge, run_rows)
         rows += run_rows
+        if judge:
+            judging.append(asyncio.create_task(judge_rows(judge, run_rows)))
+        if partial is not None:
+            partial.write_text(json.dumps({"runs_done": run, "cases": rows}, ensure_ascii=False) + "\n")
+            print(f"Pasada {run} generada: {partial}")
+    await asyncio.gather(*judging)
     return rows, judge
+
+
+def rebuild(report: dict, rows: list[dict]) -> dict:
+    """Recalcula resúmenes, casos inestables y comparación de un informe a partir de sus filas."""
+    runs = report["meta"]["runs"]
+    groups, flat = summarize(rows, runs)
+    report.update(summary=flat, groups=groups, unstable=unstable_cases(rows), cases=rows)
+    baseline = REPORTS / "system_baseline.json"
+    if report["meta"]["name"] != "system_baseline" and baseline.exists():
+        report["baseline"] = json.loads(baseline.read_text())["groups"].get("mixed")
+    return report
+
+
+def recheck(name: str) -> None:
+    """Recalcula las comprobaciones deterministas de un informe con las reglas actuales, sin el LLM."""
+    path = REPORTS / f"{name}.json"
+    report = json.loads(path.read_text())
+    cases = {(c["suite"], c["id"]): c for c in load_cases(list(SUITES))}
+    for row in report["cases"]:
+        row["checks"] = checks(cases[(row["suite"], row["id"])], row)
+    write_report(name, rebuild(report, report["cases"]), markdown(report))
+    print(f"Comprobaciones recalculadas en {path}")
+
+
+def judge_existing(name: str) -> None:
+    """Juzga las filas de un informe ya generado que no tienen veredicto válido, y lo reescribe."""
+    path = REPORTS / f"{name}.json"
+    report = json.loads(path.read_text())
+    rows = report["cases"]
+    pending = [r for r in rows if r["status"] == "completed" and r["answer"]
+               and (not r.get("judge") or "error" in r["judge"])]
+    judge = Judge()
+    asyncio.run(judge_rows(judge, pending))
+    previous = report.get("judge_usage") or {"calls": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0}
+    report["judge_usage"] = {k: previous.get(k, 0) + judge.usage.get(k, 0) for k in judge.usage}
+    report["judge_usage"]["cost_usd"] = round(previous.get("cost_usd", 0) + judge.cost_usd(), 4)
+    report["meta"]["judge"] = rubric_metadata()
+    write_report(name, rebuild(report, rows), markdown(report))
+    print(f"Juzgadas {len(pending)} respuestas; coste acumulado {report['judge_usage']['cost_usd']} USD")
 
 
 def main_cli() -> None:
@@ -364,26 +417,43 @@ def main_cli() -> None:
     parser.add_argument("--no-judge", action="store_true", help="Solo comprobaciones deterministas.")
     parser.add_argument("--name", default="system", help="Nombre del informe en evals/reports/.")
     parser.add_argument("--baseline", type=Path, default=REPORTS / "system_baseline.json")
+    parser.add_argument("--provider", choices=["groq", "openrouter"], default="groq",
+                        help="Transporte del LLM: Groq u OpenRouter con el mismo modelo (providers.py).")
+    parser.add_argument("--ids", default="", help="Solo estos casos, separados por comas (pruebas rápidas).")
+    parser.add_argument("--recheck", action="store_true",
+                        help="Solo recalcula las comprobaciones deterministas del informe --name.")
+    parser.add_argument("--judge-existing", action="store_true",
+                        help="Solo juzga las respuestas sin veredicto del informe --name y lo reescribe.")
     args = parser.parse_args()
+    if args.judge_existing:
+        judge_existing(args.name)
+        return
+    if args.recheck:
+        recheck(args.name)
+        return
 
+    provider = use_provider(args.provider)
     main.ORCHESTRATION = args.orchestration == "on"
     use_judge = not args.no_judge and bool(os.environ.get("ANTHROPIC_API_KEY"))
     if not args.no_judge and not use_judge:
         print("Sin ANTHROPIC_API_KEY: se evalúa sin juez (solo comprobaciones deterministas).")
     suites = list(SUITES) if args.suite == "all" else [args.suite]
     cases = load_cases(suites)
-    rows, judge = asyncio.run(run_all(cases, args.runs, args.concurrency, args.pace, use_judge))
+    if args.ids:
+        cases = [c for c in cases if c["id"] in set(args.ids.split(","))]
+    partial = REPORTS / f"{args.name}_partial.json"
+    rows, judge = asyncio.run(run_all(cases, args.runs, args.concurrency, args.pace, use_judge, partial))
     groups, flat = summarize(rows, args.runs)
     report = {
         "meta": {**metadata(SUITES[suites[0]], model=main.GROQ_MODEL), "name": args.name,
                  "datasets": [f"evals/datasets/{SUITES[s]}" for s in suites], "runs": args.runs,
-                 "orchestration": args.orchestration, "judge": rubric_metadata() if judge else None},
+                 "orchestration": args.orchestration, "llm": provider_metadata(provider),
+                 "judge": rubric_metadata() if judge else None},
         "summary": flat, "groups": groups, "unstable": unstable_cases(rows),
         "judge_usage": {**judge.usage, "cost_usd": judge.cost_usd()} if judge else None, "cases": rows,
     }
-    if args.name != "system_baseline" and args.baseline.exists():
-        report["baseline"] = json.loads(args.baseline.read_text())["groups"].get("mixed")
-    write_report(args.name, report, markdown(report))
+    write_report(args.name, rebuild(report, rows), markdown(report))
+    partial.unlink(missing_ok=True)
     print(json.dumps(flat, ensure_ascii=False))
 
 
