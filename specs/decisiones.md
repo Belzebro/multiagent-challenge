@@ -38,6 +38,7 @@ Registro *append-only*: una decisión no se borra; si cambia, se añade otra que
 | [DEC-032](#dec-032) | 2026-11-19 | Estado en Postgres opcional, límite de uso en la base compartida, OIDC con JWKS y resumen de memoria | Aceptada | Técnica |
 | [DEC-033](#dec-033) | 2026-11-20 | Evaluaciones con el mismo modelo vía OpenRouter y juez Claude Opus 5.5 | Aceptada | Usuario y técnica |
 | [DEC-034](#dec-034) | 2026-11-20 | Segunda ronda de calibración con el instrumento corregido; decide el gate | Aceptada | Usuario y técnica |
+| [DEC-035](#dec-035) | 2026-11-20 | Síntesis verificada: se descartan cifras, contactos, URLs e identificadores que no están en las pruebas | Aceptada | Técnica, aprobada |
 
 ---
 
@@ -338,4 +339,24 @@ Estado: **reemplazada por [DEC-033](#dec-033)**: Groq no permitía subir al plan
 - Consecuencias:
   - La persona conoce el análisis de la ronda 1, que funciona como formación en la rúbrica. Queda declarado.
   - Coste: 0.18 USD de juez para los 10 controles nuevos; las respuestas reales ya tenían veredicto.
+
+### DEC-035
+
+**La síntesis se verifica sin LLM: se descartan las frases con cifras, contactos, URLs o identificadores que no están en las pruebas.**
+
+- Contexto: con el modelo real, el respaldo de las consultas mixtas era de 0.16. `gpt-oss` añadía conocimiento general, y el crítico, que es el mismo modelo, revisó solo 6 de 43 síntesis.
+- Decisión:
+  - El sintetizador devuelve la respuesta frase a frase. Cada frase con datos lleva la cita de las pruebas que la respalda.
+  - Una verificación determinista descarta las frases con una URL, un correo, una cifra o un identificador que no aparecen en lo que devolvieron las herramientas del turno.
+  - Si descarta algo, el crítico pide una revisión sin llamar al LLM, con la lista de lo quitado, y la segunda versión también se verifica. Si la respuesta no dice que falta un dato, se añade una nota en el idioma de la pregunta.
+  - Si el modelo no devuelve la estructura, se redacta como antes, sin verificar.
+- Alternativas descartadas:
+  - Exigir que la cita aparezca literal en las pruebas. En la prueba con el modelo real, `gpt-oss` traducía o parafraseaba las citas, y se perdían datos correctos y partes enteras: en 5 consultas, la corrección bajó a 0.40 y la utilidad a 0.20.
+  - Un crítico de otra familia de modelos: más coste y latencia. Queda como siguiente paso.
+- Consecuencias, en 15 consultas mixtas × 3 pasadas ([system_mixed.md](../evals/reports/system_mixed.md)):
+  - Mejoran el respaldo (de 0.16 a 0.37), la utilidad (de 0.86 a 0.91) y la seguridad (de 0.90 a 0.95). La corrección (0.77) y «responde a todo» (0.98) no cambian.
+  - Empeoran el dato de Knowledge, de 0.76 a 0.57, porque se descarta la frase entera aunque solo una cifra sea inventada, y la latencia p50, de 11,6 a 13,9 s.
+  - No detecta las invenciones sin cifras, como una causa habitual o un paso genérico: esas solo las ve el juez.
+  - La primera versión dejaba partes sin responder («responde a todo» de 0.90, [system_mixed_run1.md](../evals/reports/system_mixed_run1.md)). Se corrigió con la nota y con un prompt que pide decir qué falta.
+  - El golden set no cambia, porque usa la vía rápida, sin síntesis.
 

@@ -23,7 +23,7 @@ La versión re-evaluada está etiquetada como [`v5-reevaluacion`](https://github
 
 | Criterio (nota) | Brecha del feedback | Qué se hizo | Evidencia |
 |---|---|---|---|
-| Orquestación (6.8) | Un especialista por turno: sin descomposición, colaboración, crítica, síntesis ni replanificación | El router planifica subtareas y el supervisor observa, replanifica y delega entre especialistas en los dos sentidos. Un sintetizador integra los hallazgos y un crítico los contrasta con las pruebas. Hay parada adaptativa y escalado a una persona, y una vía rápida sin coste extra para las consultas simples | [Arquitectura de orquestación](#arquitectura-de-orquestación), [test_orchestration.py](tests/test_orchestration.py). En 15 consultas mixtas × 3 pasadas intervienen los dos especialistas en el 96 % (0 % con un solo especialista, como v5), y la respuesta correcta sube de 0.12 a 0.77 ([system.md](evals/reports/system.md)) |
+| Orquestación (6.8) | Un especialista por turno: sin descomposición, colaboración, crítica, síntesis ni replanificación | El router planifica subtareas y el supervisor observa, replanifica y delega entre especialistas en los dos sentidos. Un sintetizador integra los hallazgos, una verificación sin LLM quita lo que no está en las pruebas y un crítico contrasta la respuesta con ellas. Hay parada adaptativa y escalado a una persona, y una vía rápida sin coste extra para las consultas simples | [Arquitectura de orquestación](#arquitectura-de-orquestación), [test_orchestration.py](tests/test_orchestration.py). En 15 consultas mixtas × 3 pasadas intervienen los dos especialistas en el 96 % (0 % con un solo especialista, como v5), y la respuesta correcta sube de 0.12 a 0.77 ([system.md](evals/reports/system.md)). La síntesis verificada sube el respaldo de esas respuestas de 0.16 a 0.37 ([system_mixed.md](evals/reports/system_mixed.md)) |
 | Evaluación (8.3) | Datasets pequeños; sin juez independiente, calibración humana, utilidad ni repeticiones | Golden set de 47 preguntas, 15 mixtas y 82 mensajes de routing, 42 de ellos ataques en 6 idiomas. Juez Claude Opus 5.5 con rúbrica versionada de cinco dimensiones, utilidad incluida. 40 respuestas etiquetadas a mano: «responde a todo» alcanza un κ de 0.84 y es la única dimensión del juez que bloquea el gate. 3 pasadas con media, desviación y casos inestables | [Evaluación con el modelo real](#evaluación-con-el-modelo-real), [calibration.md](evals/reports/calibration.md), [evals/](evals/) |
 | RAG (8.3) | recall@4 de 0.375 en español; sin umbral ni búsqueda híbrida | Índice multilingüe fusionado con MiniLM por RRF según el idioma, y umbral de abstención calibrado con validación cruzada. BM25 se midió y se descartó | [retrieval.md](evals/reports/retrieval.md), en la CI: recall@4 de 0.897 (0.844 en español, 0.955 en inglés) y 0 abstenciones falsas |
 | Observabilidad (7.8) | Sin trazas, p50/p95/p99, dashboards, alertas, feedback ni circuit breaker | Trazas OpenTelemetry por turno, `/metrics` de Prometheus, Grafana, 10 alertas, `POST /feedback`, circuit breaker y prueba de carga | [Observabilidad](#observabilidad), [test_telemetry.py](tests/test_telemetry.py), [ops/](ops/) |
@@ -379,7 +379,7 @@ Cada turno sigue el patrón **planificar → delegar entre especialistas → obs
 | Delegar en los dos sentidos | El supervisor fija `next_node` y vuelve a usar `add_conditional_edges`: Support → Knowledge y Knowledge → Support | `test_consulta_mixta_*` |
 | Observar | Al terminar, cada especialista pasa al supervisor, que guarda su respuesta y sus fuentes como hallazgo | `test_consulta_mixta_support_y_luego_knowledge` |
 | Replanificar | El supervisor cambia la subtarea siguiente o añade otra según lo encontrado (`origin: "supervisor"`) | `test_el_supervisor_cambia_la_subtarea_*`, `test_el_supervisor_anade_*` |
-| Sintetizar | El sintetizador integra los hallazgos en una sola respuesta, con sus fuentes | `test_consulta_mixta_*` |
+| Sintetizar | El sintetizador integra los hallazgos en una sola respuesta, con sus fuentes, frase a frase y con la cita de cada dato. Sin LLM, se descartan las frases con cifras, contactos, URLs o identificadores que no están en las pruebas. Si se descarta algo, el crítico pide una revisión que dice qué se quitó, y si la respuesta no dice qué falta, se añade una nota. Escribe en el idioma de la pregunta: inglés, español o portugués ([DEC-035](specs/decisiones.md#dec-035)) | `test_consulta_mixta_*`, `test_la_sintesis_*`, `test_verify_claims_*`, `test_render_claims_*`, `test_sin_estructura_*`, `test_el_idioma_de_la_sintesis_*` |
 | Criticar | El crítico contrasta la síntesis con las pruebas (lo que devolvieron las herramientas en el turno, sin repetir fragmentos), no solo con lo que dicen los especialistas. Antes de decidir, enumera lo que no esté respaldado; si la lista no está vacía, la revisión es obligatoria y el sintetizador recibe qué quitar. Aprueba o pide una revisión, como máximo una. Si la síntesis cita fuentes y en el turno no se recuperó ninguna, pide la revisión sin llamar al LLM | `test_el_critico_*`, `test_si_el_critico_rechaza_*`, `test_si_el_critico_enumera_*`, `test_las_pruebas_del_critico_*` |
 | Parar | Termina al cumplirse el plan, cuando no hay progreso o al llegar a 4 especialistas (`MAX_HOPS`). Las subtareas pendientes no se pueden saltar: solo las cierran el tope o el escalado, y la síntesis dice cuáles no se hicieron. Si el supervisor pide algo ya hecho, o una tercera subtarea al mismo especialista (`MAX_RUNS_PER_AGENT`), se pasa a la subtarea siguiente | `test_tope_de_especialistas_*`, `test_el_supervisor_no_puede_saltarse_*`, `test_la_sintesis_declara_*`, `test_si_pide_repetir_*`, `test_parafrasear_*` |
 | Humano o agente | El supervisor puede escalar (`interrupt()`) las incidencias del cliente; una duda de información pública sin respuesta no se deriva. Un HITL a mitad de plan continúa con la subtarea siguiente | `test_el_supervisor_escala_*`, `test_una_duda_de_informacion_publica_*`, `test_hitl_a_mitad_de_plan_*` |
@@ -753,22 +753,25 @@ La ejecución final es del 20/11/2026, con `openai/gpt-oss-120b`. Se hizo a trav
 | Router: 82 mensajes, 42 de ellos ataques en 6 idiomas | Accuracy de 1.0 en las 3 pasadas. Bloquea los 42 ataques en cada pasada: inyecciones directas, ofuscadas e indirectas, ingeniería social, datos de terceros, fraude y mensajes tóxicos. No bloquea ninguno de los 40 mensajes legítimos, tampoco los 15 que parecen sospechosos. p50 de 0,59 s | [routing.md](evals/reports/routing.md) |
 | Golden set: 41 preguntas con respuesta (21 en español, 16 en inglés y 4 en portugués) | Juez: correcta 0.81, respaldada 0.97, responde a todo 0.98, útil 0.88 y segura 1.00. Página esperada entre las fuentes 0.90, dato clave 0.79, idioma 0.93. 0 errores. p50 de 2,4 s, unos 3 600 tokens y 0,001 USD por pregunta | [system.md](evals/reports/system.md) |
 | Golden set: 6 preguntas sin respuesta en el corpus | Dice que no tiene la información en el 78 % de los casos (juez: correcta 0.78) | [system.md](evals/reports/system.md) |
-| 15 consultas mixtas (Support + Knowledge) | Ver la tabla siguiente | [system.md](evals/reports/system.md), [system_baseline.md](evals/reports/system_baseline.md) |
+| 15 consultas mixtas (Support + Knowledge) | Ver la tabla siguiente | [system_mixed.md](evals/reports/system_mixed.md), [system.md](evals/reports/system.md), [system_baseline.md](evals/reports/system_baseline.md) |
 | Calibración del juez con 40 respuestas etiquetadas a mano | κ de Cohen: responde a todo 0.84, la única dimensión que bloquea el gate; correcta 0.49, respaldada 0.21, útil 0.00 y segura 0.00, que se informan sin bloquear. En los 10 controles con un fallo sembrado, el juez detecta los 10 y la persona, 4 | [calibration.md](evals/reports/calibration.md) |
 
-**Orquestación frente a un solo especialista por turno (como v5),** en las 15 consultas mixtas:
+**Orquestación frente a un solo especialista por turno (como v5),** en las 15 consultas mixtas × 3 pasadas. La última columna es la versión actual, con la síntesis verificada ([DEC-035](specs/decisiones.md#dec-035)), que sustituye a la síntesis libre de la ejecución final. Su informe marca `git_dirty` porque durante la ejecución se editó el runbook (`scripts/run_evaluations.sh`); `main.py` y `evals/` eran los del commit `4b24900`.
 
-| | Un especialista (v5) | Orquestación |
-|---|---:|---:|
-| Intervienen Support y Knowledge | 0 % | **96 %** |
-| Dato del diagnóstico de Support en la respuesta | 93 % | 93 % |
-| Página esperada de Knowledge entre las fuentes | 0 % | **67 %** |
-| Juez: correcta | 0.12 | **0.77** |
-| Juez: útil | 0.48 | **0.86** |
-| Responde en el idioma de la pregunta | 47 % | **96 %** |
-| Juez: respaldada por las pruebas | 0.24 | 0.16 |
-| Latencia p50 / p95 | 3,1 s / 4,4 s | 11,6 s / 16,5 s |
-| Tokens y coste por consulta | 3 000 · 0,001 USD | 14 900 · 0,004 USD |
+| | Un especialista (v5) | Orquestación, síntesis libre | Orquestación, síntesis verificada |
+|---|---:|---:|---:|
+| Intervienen Support y Knowledge | 0 % | **96 %** | **96 %** |
+| Dato del diagnóstico de Support en la respuesta | 93 % | 93 % | **96 %** |
+| Página esperada de Knowledge entre las fuentes | 0 % | **67 %** | 64 % |
+| Dato de Knowledge en la respuesta | 24 % | **76 %** | 57 % |
+| Juez: correcta | 0.12 | **0.77** | **0.77** |
+| Juez: respaldada por las pruebas | 0.24 | 0.16 | **0.37** |
+| Juez: responde a todo | 0.95 | **1.00** | 0.98 |
+| Juez: útil | 0.48 | 0.86 | **0.91** |
+| Juez: segura | **0.95** | 0.90 | **0.95** |
+| Responde en el idioma de la pregunta | 47 % | **96 %** | **96 %** |
+| Latencia p50 / p95 | 3,1 s / 4,4 s | 11,6 s / 16,5 s | 13,9 s / 20,9 s |
+| Tokens y coste por consulta | 3 000 · 0,001 USD | 14 900 · 0,004 USD | 17 800 · 0,005 USD |
 
 **Calibración del juez.** Una persona etiquetó a ciegas 40 respuestas con la misma rúbrica, referencia y pruebas que ve el juez: 30 respuestas reales de la primera ejecución y 10 controles con un fallo sembrado. Solo «responde a todo» supera un κ de 0.6, así que es la única dimensión del juez que bloquea el gate ([DEC-029](specs/decisiones.md#dec-029)). Las otras cuatro se informan sin bloquear. La seguridad sigue bloqueando por la vía determinista del router: recall del guardrail ≥ 0.97 y como mucho un 5 % de bloqueos falsos. El κ mide acuerdo, no quién acierta, y los controles muestran de qué lado está el error:
 
@@ -790,16 +793,21 @@ El etiquetado humano encontró después un séptimo fallo, que no detectó ningu
 
 7. `gpt-oss` cita con su formato interno (`【1†L1-L7】`) aunque el prompt pide `[1]`. Ese formato llegaba al comercio en 120 de las 186 respuestas de la ejecución final. El juez lo vio, pero lo trató como ruido menor: lo menciona en 9 razones. Ahora la API, el historial y los runners lo normalizan a `[1]`, con su test. La limpieza es determinista y, aplicada a las 186 respuestas grabadas, no cambia ninguna de sus comprobaciones. Los informes conservan el texto tal como salió del modelo.
 
+Después, la síntesis verificada ([DEC-035](specs/decisiones.md#dec-035)) subió el respaldo de las consultas mixtas de 0.16 a 0.37. Su evaluación encontró dos fallos más, corregidos con su test:
+
+8. Exigir que la cita de cada dato aparezca literal en las pruebas no funciona con `gpt-oss`, que traduce o parafrasea las citas. En 5 consultas se descartaban datos correctos, y la utilidad bajó a 0.20. Ahora solo se descartan las frases con cifras, contactos, URLs o identificadores que no están en las pruebas.
+9. La primera versión quitaba partes de la respuesta sin avisar: «responde a todo» bajó de 1.00 a 0.90 ([system_mixed_run1.md](evals/reports/system_mixed_run1.md)). Ahora el prompt pide decir qué dato falta y, si la respuesta no lo dice, se añade una nota en el idioma de la pregunta. Además, el sintetizador distingue el portugués, que antes podía recibir la síntesis en español.
+
 **Limitaciones de esta evaluación**
 
-- **Respaldo en las consultas mixtas: 0.16.** `gpt-oss` añade conocimiento general, como las causas habituales de un código de rechazo o pasos genéricos, aunque los prompts lo prohíben. El crítico es el mismo modelo y lo detecta pocas veces (revisó 6 de 43 síntesis); el juez independiente lo detecta casi siempre. En el golden set, donde solo responde Knowledge, el respaldo es de 0.97. El siguiente paso sería un crítico de otra familia o una verificación determinista de cada afirmación.
-- **Coste de la colaboración.** En las consultas mixtas, la orquestación multiplica por 4 la latencia y por 5 los tokens; a cambio, cubre las dos partes. Las consultas de una sola intención usan la vía rápida y cuestan lo mismo que en v5 (p50 de 2,4 s).
+- **Respaldo en las consultas mixtas: 0.37 con la síntesis verificada,** frente a 0.16 sin ella. La verificación quita las cifras, los contactos y las URLs inventados. No detecta las invenciones sin cifras, como las causas habituales de un código de rechazo o un paso genérico: esas las ve el juez independiente, y el crítico, que es el mismo modelo, casi nunca. Además, descarta la frase entera aunque solo una de sus cifras sea inventada, y el dato de Knowledge en la respuesta baja de 0.76 a 0.57. En el golden set, donde solo responde Knowledge, el respaldo es de 0.97. Los siguientes pasos serían indicar a la revisión qué cifra falla y usar un crítico de otra familia de modelos.
+- **Coste de la colaboración.** En las consultas mixtas, la orquestación con la síntesis verificada multiplica por 4,5 la latencia (p50 de 13,9 s) y por 6 los tokens; a cambio, cubre las dos partes. Las consultas de una sola intención usan la vía rápida y cuestan lo mismo que en v5 (p50 de 2,4 s).
 - **Una sola persona calibra el juez,** sin conocimiento experto del negocio. Etiquetó con la misma referencia y las mismas pruebas que ve el juez ([DEC-029](specs/decisiones.md#dec-029)) y no detectó 6 de los 10 controles. Por eso solo «responde a todo» bloquea el gate. Para que correcta y respaldada también bloqueen, hace falta una segunda persona y una sesión de adjudicación sobre las 21 respuestas con desacuerdo.
 - **Qué se mide y dónde.** La orquestación se prueba con un LLM simulado en la CI: si el sistema ejecuta bien cada decisión. La calidad se mide con el modelo real, a mano, al cambiar el modelo, los prompts o el corpus, y la CI comprueba los últimos informes contra el gate.
 
 ## Limitaciones y siguientes pasos
 
-- **Respaldo en las consultas mixtas.** El juez da 0.16: `gpt-oss` añade conocimiento general que su propio crítico apenas detecta. Ver [Limitaciones de esta evaluación](#evaluación-con-el-modelo-real).
+- **Respaldo en las consultas mixtas.** El juez da 0.37 con la síntesis verificada (0.16 sin ella): la verificación determinista no ve las invenciones sin cifras, y el crítico del mismo modelo casi nunca las detecta. Ver [Limitaciones de esta evaluación](#evaluación-con-el-modelo-real).
 - **Calibración del juez con una sola persona.** Solo «responde a todo» alcanza un κ ≥ 0.6. Las demás dimensiones del juez se informan, pero no bloquean hasta que una segunda persona confirme las etiquetas.
 
 - **Réplicas probadas con dos instancias en un proceso.** El test de la CI abre dos estados independientes (pools, checkpointers y almacenes propios) sobre el mismo Postgres. No se despliegan réplicas detrás de un balanceador: con el estado compartido basta con añadirlas.

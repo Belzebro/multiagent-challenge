@@ -68,6 +68,15 @@ Evidencia: [tests/test_postgres.py](../../tests/test_postgres.py), [tests/test_p
 - [x] **T-152** RS256 con JWKS (`JWT_JWKS_URL`): rechaza HS256, kid desconocido, otra clave y caducados; 503 si el proveedor no responde. HS256 queda para desarrollo. → SEC2-02
 - [x] **T-153** Resumen incremental de conversaciones largas, en paralelo con el router; los agentes reciben el resumen y los mensajes recientes. → MEM2-01
 
+## F17: tras la primera calibración (A)
+
+Evidencia: [DEC-034](../decisiones.md#dec-034), [DEC-035](../decisiones.md#dec-035), [system_mixed.md](../../evals/reports/system_mixed.md), [calibration.md](../../evals/reports/calibration.md) y [calibration_r1.md](../../evals/reports/calibration_r1.md).
+
+- [x] **T-170** Ronda 2 de calibración, registrada antes de etiquetar: 40 respuestas de la ejecución final, la página con el comercio visible y una guía de la rúbrica, y controles con textos nuevos. La ronda 1 queda como piloto. → EVAL2-04
+- [x] **T-171** Síntesis verificada: frases con cita y descarte determinista de cifras, contactos, URLs e identificadores que no están en las pruebas, con revisión y nota cuando se quita algo; portugués explícito en la síntesis. → ORQ2, EVAL2-05
+- [x] **T-172** Mixtas con la síntesis verificada (15 × 3) y sección `mixed` en el gate de la CI. → EVAL2-03
+- [ ] **T-173** Calibración de la ronda 2 (κ por dimensión), README y tag.
+
 ## F16: cierre (A)
 
 - [x] **T-160** README: novedades de la iteración 2 (brecha → qué se hizo → evidencia), tabla patrón → test y resultados con el modelo real.
