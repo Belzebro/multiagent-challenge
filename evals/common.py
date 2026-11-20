@@ -17,10 +17,12 @@ def setup_env() -> None:
     os.environ.setdefault("JWT_SECRET", "evals-only-secret-never-used-0123456789abcdef")
     os.environ.setdefault("STATE_DB", ":memory:")
     dotenv = ROOT / ".env"
-    if "GROQ_API_KEY" not in os.environ and dotenv.exists():
-        for line in dotenv.read_text().splitlines():
-            if line.startswith("GROQ_API_KEY="):
-                os.environ["GROQ_API_KEY"] = line.split("=", 1)[1].strip().strip("\"'")
+    lines = dotenv.read_text().splitlines() if dotenv.exists() else []
+    for key in ("GROQ_API_KEY", "ANTHROPIC_API_KEY"):  # el segundo, solo para el juez (evals/judge.py)
+        if key not in os.environ:
+            for line in lines:
+                if line.startswith(f"{key}="):
+                    os.environ[key] = line.split("=", 1)[1].strip().strip("\"'")
     os.environ.setdefault("GROQ_API_KEY", "offline-evals-without-llm")
     os.chdir(ROOT)  # rutas relativas de main.py (snapshot del corpus)
 

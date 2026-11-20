@@ -1,8 +1,10 @@
 """Evaluación del router con el modelo real (Groq): accuracy, matriz de confusión y bloqueo de ataques.
 
-Llama solo al nodo router (una petición por caso), a un ritmo compatible con el plan gratuito de Groq.
+Llama solo al nodo router (una petición por caso). Con --runs N repite la batería N veces: el informe da la
+media y la desviación de cada métrica, el peor resultado de bloqueo de ataques y los casos inestables.
+`also_ok` admite una segunda ruta razonable en los casos ambiguos; el bloqueo nunca se acepta en uno legítimo.
 
-Uso: python -m evals.run_routing [--pace SEGUNDOS]
+Uso: python -m evals.run_routing [--runs 3] [--pace SEGUNDOS]
 """
 
 import argparse
@@ -22,10 +24,14 @@ import main  # noqa: E402
 
 DATASET = "routing.jsonl"
 ROUTES = ("guardrail", "knowledge", "support")
-ATTACKS = {"toxic", "injection", "fraud"}
+ATTACKS = {"toxic", "injection", "fraud", "obfuscated", "indirect", "social", "exfiltration"}
 
 
-async def run(cases: list[dict], pace: float) -> tuple[list[dict], dict]:
+def correct(row: dict) -> bool:
+    return row["predicted"] == row["expected"] or row["predicted"] in row.get("also_ok", [])
+
+
+async def run(cases: list[dict], pace: float, run_number: int = 1) -> tuple[list[dict], dict]:
     rows = []
     with get_usage_metadata_callback() as usage:
         for i, case in enumerate(cases):
@@ -36,7 +42,7 @@ async def run(cases: list[dict], pace: float) -> tuple[list[dict], dict]:
                 predicted = (await main.router_agent(state))["next_node"]
             except Exception as exc:  # 429 persistente, timeout...: cuenta como fallo
                 predicted, error = None, type(exc).__name__
-            rows.append({**case, "predicted": predicted, "error": error,
+            rows.append({**case, "run": run_number, "predicted": predicted, "error": error,
                          "latency_s": round(time.perf_counter() - start, 2)})
             print(f"[{i + 1}/{len(cases)}] {case['id']} {case['expected']:9} -> {predicted}")
             if i < len(cases) - 1:
@@ -59,9 +65,13 @@ def summarize(rows: list[dict], usage: dict) -> dict:
     tokens = sum(u.get("total_tokens", 0) for u in usage.values())
     return {
         "cases": n,
-        "accuracy": round(sum(r["predicted"] == r["expected"] for r in rows) / n, 3),
+        "accuracy": round(sum(correct(r) for r in rows) / n, 3),
         "guardrail_recall": round(sum(r["predicted"] == "guardrail" for r in attacks) / len(attacks), 3),
         "false_block_rate": round(sum(r["predicted"] == "guardrail" for r in benign) / len(benign), 3),
+        "attacks": len(attacks),
+        "per_category": {cat: round(sum(correct(r) for r in rows if r["category"] == cat)
+                                    / sum(r["category"] == cat for r in rows), 3)
+                         for cat in sorted({r["category"] for r in rows})},
         "errors": sum(bool(r["error"]) for r in rows),
         "per_route": per_route,
         "confusion": {exp: dict(Counter(str(r["predicted"]) for r in rows if r["expected"] == exp))
@@ -81,13 +91,16 @@ def markdown(report: dict) -> str:
         f"`{meta['generated_at']}` · commit `{meta['git_commit']}` · modelo `{meta['model']}` · "
         f"dataset `{meta['dataset_sha256']}`",
         "",
-        f"{s['cases']} mensajes en español e inglés: consultas legítimas, mensajes tóxicos, inyecciones de "
-        "prompt y peticiones de fraude o de datos ajenos.",
+        f"{s['cases'] // s.get('runs', 1)} mensajes ({s['attacks'] // s.get('runs', 1)} ataques) en "
+        f"{s.get('runs', 1)} pasadas. Idiomas: español, inglés, portugués, francés, alemán e italiano. "
+        "Hay consultas legítimas (algunas parecen sospechosas), mensajes tóxicos, inyecciones directas, "
+        "ofuscadas e indirectas, ingeniería social, peticiones de fraude y de datos de terceros.",
         "",
         "| Métrica | Valor |",
         "|---|---:|",
         f"| Accuracy | {pct(s['accuracy'])} |",
-        f"| Ataques bloqueados (recall de `guardrail`) | {pct(s['guardrail_recall'])} |",
+        f"| Ataques bloqueados (recall de `guardrail`) | {pct(s['guardrail_recall'])} "
+        f"(peor pasada {pct(s.get('guardrail_recall_min', s['guardrail_recall']))}) |",
         f"| Consultas legítimas bloqueadas por error | {pct(s['false_block_rate'])} |",
         f"| Errores de llamada | {s['errors']} |",
         f"| Latencia p50 / p95 | {s['latency_p50_s']} s / {s['latency_p95_s']} s |",
@@ -102,25 +115,52 @@ def markdown(report: dict) -> str:
         row = s["confusion"][exp]
         counts = " | ".join(str(row.get(route, 0)) for route in ROUTES)
         lines.append(f"| {exp} | {counts} |")
-    misses = [r for r in report["cases"] if r["predicted"] != r["expected"]]
+    lines += ["", "Acierto por categoría:", "", "| Categoría | Acierto |", "|---|---:|"]
+    lines += [f"| {cat} | {pct(value)} |" for cat, value in s["per_category"].items()]
+    lines += ["", f"Casos inestables entre pasadas: {', '.join(s.get('unstable_cases', [])) or 'ninguno'}."]
+    misses = [r for r in report["cases"] if not correct(r)]
     lines += ["", "## Errores", ""]
-    lines += [f"- `{r['id']}` ({r['category']}) «{r['message']}»: esperado `{r['expected']}`, "
-              f"predicho `{r['predicted']}`" for r in misses] or ["- Ninguno."]
+    lines += [f"- `{r['id']}` (pasada {r.get('run', 1)}, {r['category']}) «{r['message']}»: esperado "
+              f"`{r['expected']}`, predicho `{r['predicted']}`" for r in misses] or ["- Ninguno."]
     return "\n".join(lines) + "\n"
+
+
+def aggregate(per_run: list[dict], rows: list[dict]) -> dict:
+    """Resumen de todas las pasadas: medias, desviaciones, peor pasada y casos inestables."""
+    summary = summarize(rows, {})  # sobre todas las filas; los tokens se suman aparte
+    for key in ("accuracy", "guardrail_recall", "false_block_rate"):
+        values = [s[key] for s in per_run]
+        summary[f"{key}_std"] = round(statistics.stdev(values), 3) if len(values) > 1 else 0.0
+        summary[f"{key}_runs"] = values
+    summary["guardrail_recall_min"] = min(s["guardrail_recall"] for s in per_run)  # la peor pasada
+    summary["false_block_rate_max"] = max(s["false_block_rate"] for s in per_run)
+    summary["runs"] = len(per_run)
+    summary["total_tokens"] = sum(s["total_tokens"] for s in per_run)
+    summary["tokens_per_case"] = round(summary["total_tokens"] / len(rows)) if rows else 0
+    by_case: dict[str, set] = {}
+    for row in rows:
+        by_case.setdefault(row["id"], set()).add(str(row["predicted"]))
+    summary["unstable_cases"] = sorted(case for case, predictions in by_case.items() if len(predictions) > 1)
+    return summary
 
 
 def main_cli() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--pace", type=float, default=8.0, help="Segundos entre llamadas (plan gratuito).")
     args = parser.parse_args()
     cases = load_jsonl(DATASET)
-    rows, usage = asyncio.run(run(cases, args.pace))
-    report = {"meta": metadata(DATASET, model=main.GROQ_MODEL), "summary": summarize(rows, usage),
-              "cases": rows}
+    rows, per_run = [], []
+    for n in range(1, args.runs + 1):
+        run_rows, usage = asyncio.run(run(cases, args.pace, n))
+        rows += run_rows
+        per_run.append(summarize(run_rows, usage))
+    report = {"meta": {**metadata(DATASET, model=main.GROQ_MODEL), "runs": args.runs},
+              "summary": aggregate(per_run, rows), "per_run": per_run, "cases": rows}
     write_report("routing", report, markdown(report))
     s = report["summary"]
-    print(f"accuracy={s['accuracy']} guardrail_recall={s['guardrail_recall']} "
-          f"false_block_rate={s['false_block_rate']} tokens={s['total_tokens']}")
+    print(f"accuracy={s['accuracy']} guardrail_recall={s['guardrail_recall']} (peor pasada "
+          f"{s['guardrail_recall_min']}) false_block_rate={s['false_block_rate']} tokens={s['total_tokens']}")
 
 
 if __name__ == "__main__":

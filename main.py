@@ -159,6 +159,9 @@ class State(TypedDict):
 # --------------------------------------------------------------------------------------
 MAX_HOPS = 4  # especialistas como máximo por turno
 MAX_RUNS_PER_AGENT = 2  # un especialista repite como máximo una vez por turno
+# "off": un especialista por turno, como en v5. Es la línea base de las evaluaciones y un interruptor
+# operativo si la colaboración dispara la latencia o el coste.
+ORCHESTRATION = os.getenv("ORCHESTRATION", "on").lower() != "off"
 
 
 class PlannedSubtask(BaseModel):
@@ -228,7 +231,7 @@ async def router_agent(state: State) -> dict:
         logger.info("Router -> guardrail (%s)", decision.reason)
         return {"next_node": "guardrail", "route": "guardrail", "plan": [], **turn}
     plan: list[Subtask] = [{"agent": s.agent, "goal": s.goal, "status": "pending", "origin": "router"}
-                           for s in decision.plan[:MAX_HOPS]]
+                           for s in (decision.plan[:MAX_HOPS] if ORCHESTRATION else [])]
     if not plan:  # una sola intención: la subtarea es el propio mensaje
         plan = [{"agent": decision.next_node, "goal": last.text, "status": "pending", "origin": "router"}]
     first = plan[0]["agent"]  # el primer paso del plan manda sobre next_node si no coinciden
@@ -590,6 +593,8 @@ async def supervisor_node(state: State) -> dict:
     findings.append({"agent": agent, "goal": current["goal"] if current else "",
                      "answer": messages[-1].text, "sources": list(dict.fromkeys(sources))})
     update = {"plan": plan, "findings": findings, "hops": hops}
+    if not ORCHESTRATION:  # como en v5: el especialista responde y termina el turno
+        return {**update, "next_node": "finish"}
 
     # Vía rápida, sin LLM: una sola intención resuelta con normalidad. El supervisor solo interviene si
     # el especialista agotó sus herramientas o si el RAG no recuperó nada.

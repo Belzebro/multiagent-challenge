@@ -1,0 +1,30 @@
+{
+ "sample": true,
+ "note": "Ejemplos para probar la herramienta: el conjunto real se genera con python -m evals.calibrate build-set.",
+ "items": [
+  {
+   "item": "E01",
+   "lang": "es",
+   "question": "¿Cuánto dura la batería de los terminales de pago presenciales de Getnet?",
+   "reference": "La respuesta está en https://www.getnet.net/en/our-solutions/in-person-payments. Debe incluir este dato: 12.",
+   "evidence": "[search_getnet_knowledge] [1] In-person Payments (https://www.getnet.net/en/our-solutions/in-person-payments)\nGet Mini\nThe simpliest mobile POS.\nSome of the advantages include:\nSell anytime, anywhere\nAccept payments through our small card reader connected to your mobile or tablet.\nEquipped with a battery that lasts up to 12 hours\nPerfect for businesses such as taxis or home delivery so you can get paid anytime, anywhere.",
+   "answer": "Según la web de Getnet, el **Get Mini** (el TPV móvil más sencillo) lleva una batería que dura **hasta 12 horas** [1]. Es ideal para taxis o reparto a domicilio."
+  },
+  {
+   "item": "E02",
+   "lang": "es",
+   "question": "Mi terminal está offline desde hace un rato. ¿Cuánto dura la batería de los terminales de Getnet?",
+   "reference": "Tiene dos partes. Soporte: diagnóstico con los datos del sistema del comercio, que debe mencionar E-102. Conocimiento: información de https://www.getnet.net/en/our-solutions/in-person-payments. Debe incluir: 12.",
+   "evidence": "[check_terminal_connection] [Monitor de terminales] Usuario eval-user. Terminal POS-4471:\n- Estado: OFFLINE desde hace 47 min; último error E-102 (sin conexión con el host)\n- Red: Wi-Fi con señal débil (-82 dBm); SIM 4G de respaldo desactivada\n- Firmware 3.2.1 (actualización 3.4.0 disponible)\n\n[search_getnet_knowledge] [1] In-person Payments (https://www.getnet.net/en/our-solutions/in-person-payments)\nGet Mini\nThe simpliest mobile POS.\nSome of the advantages include:\nSell anytime, anywhere\nAccept payments through our small card reader connected to your mobile or tablet.\nEquipped with a battery that lasts up to 12 hours\nPerfect for businesses such as taxis or home delivery so you can get paid anytime, anywhere.",
+   "answer": "**Diagnóstico de tu terminal POS-4471**\n\n- Está **offline desde hace 47 minutos** con el error **E-102** (sin conexión con el host).\n- La señal Wi-Fi es muy débil (-82 dBm) y la SIM 4G de respaldo está desactivada.\n\n**Qué hacer**\n1. Acerca el terminal al router o activa la SIM 4G de respaldo.\n2. Instala la actualización de firmware 3.4.0.\n\n**Batería**\n\n| Terminal | Duración |\n|---|---|\n| Get Mini | Hasta 12 horas [1] |"
+  },
+  {
+   "item": "E03",
+   "lang": "en",
+   "question": "What was Getnet's net profit in 2023?",
+   "reference": "La web de Getnet no tiene esta información. La respuesta correcta dice que no la tiene, puede sugerir contactar con Getnet y no inventa datos.",
+   "evidence": "[search_getnet_knowledge] Sin resultados relevantes: ningún fragmento de la web de Getnet se parece lo bastante a la consulta.",
+   "answer": "I couldn't find Getnet's 2023 net profit on its website. For financial results, please contact Getnet or check Banco Santander's investor relations."
+  }
+ ]
+}

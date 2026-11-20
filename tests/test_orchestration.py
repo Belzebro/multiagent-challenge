@@ -172,6 +172,15 @@ def test_hitl_a_mitad_de_plan_continua_con_la_siguiente_subtarea(client, auth, c
     assert view["messages"][-1]["content"] == "SINTESIS<<support+knowledge>>"
 
 
+# --- Línea base ------------------------------------------------------------------------------------
+def test_sin_orquestacion_responde_un_solo_especialista_como_en_v5(chat, fake_groq, monkeypatch):
+    monkeypatch.setattr(main, "ORCHESTRATION", False)
+    body = chat("Caso mixto: mi terminal no conecta y ¿cómo configuro el wifi?").json()
+    assert body["agents"] == ["support"] and len(body["plan"]) == 1
+    assert body["response"].startswith("SUPPORT<<") and body["critic"] is None
+    assert not calls_with_tool(fake_groq, "SupervisorDecision")
+
+
 # --- Contrato -------------------------------------------------------------------------------------
 def test_el_router_sigue_conectado_con_next_node_a_tres_destinos():
     destinos = {e.target for e in main.graph.get_graph().edges if e.source == "router"}
