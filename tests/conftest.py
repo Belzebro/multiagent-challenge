@@ -62,6 +62,8 @@ class FakeGroq:
     # Palabra clave del mensaje -> plan que devuelve el router (la primera que aparezca gana).
     PLANS = [
         ("saltos", [("knowledge", "búsqueda 0"), ("support", "Revisión final")]),
+        ("tope", [("knowledge", "Buscar A"), ("support", "Buscar B"), ("knowledge", "Buscar C"),
+                  ("support", "Buscar D")]),
         ("citafalsa", [("support", "Diagnosticar el terminal"), ("support", "Revisar los cobros")]),
         ("repite", [("knowledge", "Buscar A"), ("support", "Buscar B")]),
         ("inverso", [("knowledge", "Condiciones oficiales de los reembolsos"),
@@ -157,8 +159,10 @@ class FakeGroq:
             return decide("delegate", "knowledge", "Buscar A")
         if "parafrasea" in low:  # pide a Support lo mismo con otras palabras una y otra vez
             return decide("delegate", "support", f"El mismo diagnóstico, versión {system.count('[hecha]')}")
-        if "temprano" in low:  # sintetiza con una subtarea aún pendiente
+        if "temprano" in low:  # quiere sintetizar con una subtarea aún pendiente
             return decide("synthesize")
+        if "tope" in low and len(re.findall(r"^- (knowledge|support) ·", system, re.MULTILINE)) == 1:
+            return decide("delegate", "knowledge", "Dato adicional")  # con ella, la última ya no cabe
         if "ampliar" in low and "Revisar transacciones" not in system:
             return decide("delegate", "support", "Revisar transacciones rechazadas")
         if "replan" in low and "[pendiente] knowledge" in system:

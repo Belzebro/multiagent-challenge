@@ -4,6 +4,8 @@ planificar → delegar entre especialistas → observar → replanificar → sin
 y humano o agente cuando hace falta.
 """
 
+from langchain_core.messages import HumanMessage, ToolMessage
+
 import main
 
 
@@ -46,6 +48,22 @@ def test_consulta_mixta_support_y_luego_knowledge(chat, fake_groq):
     note = next(m["content"] for m in knowledge_request["messages"]
                 if m["role"] == "system" and "Subtarea asignada" in m["content"])
     assert "Guía oficial para configurar el Wi-Fi" in note and "Monitor de terminales" in note
+    # El crítico contrasta con lo que devolvieron las herramientas, no solo con lo que dicen los agentes
+    critic_request = calls_with_tool(fake_groq, "CriticVerdict")[0]
+    evidence = next(m["content"] for m in critic_request["messages"]
+                    if m["role"] == "system" and "Pruebas:" in m["content"])
+    assert "[check_terminal_connection]" in evidence and "[search_getnet_knowledge]" in evidence
+
+
+def test_las_pruebas_del_critico_no_repiten_fragmentos():
+    """Fallo encontrado con el modelo real: el crítico aprobó un producto inventado por un especialista."""
+    fragment = "[1] Online payments (https://www.getnet.net/en)\nTexto del fragmento"
+    repeated = fragment.replace("[1]", "[3]")  # otra búsqueda del turno devuelve el mismo fragmento
+    state = {"messages": [
+        HumanMessage(content="hola"),
+        ToolMessage(content=fragment, name="search_getnet_knowledge", tool_call_id="a"),
+        ToolMessage(content=repeated, name="search_getnet_knowledge", tool_call_id="b")]}
+    assert main.turn_evidence(state).count("Texto del fragmento") == 1
 
 
 def test_consulta_mixta_knowledge_y_luego_support(chat):
@@ -105,12 +123,23 @@ def test_parafrasear_al_mismo_especialista_no_crea_un_bucle(chat):
     assert ("knowledge", "done") in [(s["agent"], s["status"]) for s in body["plan"]]
 
 
-def test_la_sintesis_declara_las_subtareas_que_no_se_hicieron(chat, fake_groq):
+def test_el_supervisor_no_puede_saltarse_subtareas_pendientes(chat):
+    """Fallo encontrado con el modelo real: sintetizaba creyendo que Support respondió por Knowledge."""
     body = chat("Caso temprano: mi terminal no conecta y quiero la guía").json()
-    assert [s["status"] for s in body["plan"]] == ["done", "skipped"]
+    assert body["agents"] == ["support", "knowledge"]
+    assert [s["status"] for s in body["plan"]] == ["done", "done"]
+    assert body["response"] == "SINTESIS<<support+knowledge>>"
+
+
+def test_la_sintesis_declara_las_subtareas_que_no_se_hicieron(chat, fake_groq):
+    body = chat("Caso tope: cuatro preguntas y una más").json()
+    assert body["agents"] == ["knowledge", "knowledge", "support", "knowledge"]  # MAX_HOPS
+    assert [(s["goal"], s["status"]) for s in body["plan"]] == [
+        ("Buscar A", "done"), ("Dato adicional", "done"), ("Buscar B", "done"), ("Buscar C", "done"),
+        ("Buscar D", "skipped")]
     note = next(m["content"] for m in synthesizer_calls(fake_groq)[0]["messages"]
                 if m["role"] == "system" and "Hallazgos de los especialistas" in m["content"])
-    assert "no se pudieron hacer" in note and "Guía oficial para configurar el Wi-Fi" in note
+    assert "no se pudieron hacer" in note and "Buscar D" in note
 
 
 def test_el_critico_rechaza_citas_sin_fuentes_sin_llamar_al_llm(chat, fake_groq):
