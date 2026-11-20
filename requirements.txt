@@ -11,5 +11,11 @@ beautifulsoup4
 sentence-transformers
 langchain-community
 langchain-text-splitters
-PyJWT
+PyJWT[crypto]
 langgraph-checkpoint-sqlite
+opentelemetry-sdk
+opentelemetry-exporter-otlp-proto-http
+prometheus-client
+langgraph-checkpoint-postgres
+psycopg[binary]
+psycopg-pool

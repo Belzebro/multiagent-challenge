@@ -9,9 +9,41 @@ services:
       GROQ_API_KEY: "${GROQ_API_KEY:?Falta GROQ_API_KEY. Copia .env.example a .env y rellénala}"
       GROQ_MODEL: "${GROQ_MODEL:-openai/gpt-oss-120b}"
       JWT_SECRET: "${JWT_SECRET:?Falta JWT_SECRET en .env (mínimo 32 caracteres; ver .env.example)}"
+      # Observabilidad (opcional): con el perfil `observability`, OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
+      METRICS_TOKEN: "${METRICS_TOKEN:-}"
     volumes:
       - state:/app/data/state  # memoria (checkpoints) y tickets de HITL sobreviven a los reinicios
     restart: unless-stopped
+
+  # --- Perfil `observability`: docker compose --profile observability up -------------------------------
+  jaeger:  # trazas: http://localhost:16686
+    image: jaegertracing/all-in-one:1.57.0
+    profiles: [observability]
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+
+  prometheus:  # métricas y reglas de alerta: http://localhost:9090
+    image: prom/prometheus:v2.53.0
+    profiles: [observability]
+    volumes:
+      - ./ops/prometheus:/etc/prometheus:ro
+    ports:
+      - "9090:9090"
+
+  grafana:  # dashboard: http://localhost:3000 (lectura anónima)
+    image: grafana/grafana:11.1.0
+    profiles: [observability]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
 
 volumes:
   state:

@@ -23,6 +23,16 @@ from fastapi.testclient import TestClient  # noqa: E402
 from langchain_community.vectorstores import FAISS  # noqa: E402
 from langchain_core.documents import Document  # noqa: E402
 from langchain_core.embeddings import Embeddings  # noqa: E402
+from opentelemetry import trace  # noqa: E402
+from opentelemetry.sdk.trace import TracerProvider  # noqa: E402
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor  # noqa: E402
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter  # noqa: E402
+
+# Trazas en memoria para toda la sesión (el proveedor global solo se puede fijar una vez).
+SPANS = InMemorySpanExporter()
+_provider = TracerProvider()
+_provider.add_span_processor(SimpleSpanProcessor(SPANS))
+trace.set_tracer_provider(_provider)
 
 import main  # noqa: E402
 
@@ -246,3 +256,10 @@ def chat(client, auth):
                            headers=auth() if headers is None else headers)
 
     return _chat
+
+
+@pytest.fixture
+def spans():
+    """Los spans terminados durante el test (OpenTelemetry en memoria)."""
+    SPANS.clear()
+    return SPANS

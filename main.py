@@ -41,7 +41,7 @@ os.environ.setdefault("USER_AGENT", "Mozilla/5.0 (compatible; GetnetMultiAgent/1
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, Path, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_community.vectorstores import FAISS
@@ -64,7 +64,11 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import InjectedState, ToolNode, tools_condition
 from langgraph.types import Command, interrupt
+from opentelemetry.trace import SpanKind
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
+
+import observability as obs
 
 # --------------------------------------------------------------------------------------
 # 1. Configuración
@@ -85,6 +89,12 @@ _log_handler.addFilter(RequestIdFilter())
 logging.basicConfig(level=logging.INFO, handlers=[_log_handler],
                     format="%(asctime)s %(levelname)s %(name)s [%(request_id)s] | %(message)s")
 logger = logging.getLogger("getnet.multiagent")
+TRACING = obs.setup_tracing()  # solo exporta si OTEL_EXPORTER_OTLP_ENDPOINT está definido
+METRICS_TOKEN = os.getenv("METRICS_TOKEN", "")  # si se define, /metrics exige "Bearer <token>"
+# Circuit breaker del LLM: tras CIRCUIT_FAILURES turnos seguidos con un fallo de Groq, /chat responde 503
+# al instante durante CIRCUIT_COOLDOWN_S segundos en vez de esperar a que cada petición agote sus reintentos.
+CIRCUIT = obs.CircuitBreaker(int(os.getenv("CIRCUIT_FAILURES", "3")),
+                             float(os.getenv("CIRCUIT_COOLDOWN_S", "30")))
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
@@ -371,6 +381,7 @@ def search_getnet_knowledge(query: str) -> tuple[str, list[str]]:
         return "La base de conocimiento de Getnet no está disponible en este momento.", []
     docs = _knowledge.search(query, k=4)
     if not docs:
+        obs.RAG_ABSTENTIONS.inc()
         return NO_RELEVANT_RESULTS, []
     content = "\n\n---\n\n".join(
         f"[{i}] {d.metadata.get('title', '')} ({d.metadata.get('source', '')})\n{d.page_content}"
@@ -818,7 +829,23 @@ class TicketStore:
             "owner TEXT NOT NULL, kind TEXT NOT NULL, payload TEXT NOT NULL, status TEXT NOT NULL, "
             "operator TEXT, decision TEXT, reply TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"
         )
+        await self.conn.execute(  # valoraciones de los usuarios (POST /feedback)
+            "CREATE TABLE IF NOT EXISTS feedback (id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL, "
+            "owner TEXT NOT NULL, rating TEXT NOT NULL, comment TEXT NOT NULL, created_at TEXT NOT NULL)"
+        )
         await self.conn.commit()
+
+    async def count(self, status: str) -> int:
+        cursor = await self.conn.execute("SELECT COUNT(*) FROM tickets WHERE status = ?", (status,))
+        return (await cursor.fetchone())[0]
+
+    async def add_feedback(self, conversation_id: str, owner: str, rating: str, comment: str) -> str:
+        feedback_id = uuid.uuid4().hex
+        await self.conn.execute(
+            "INSERT INTO feedback (id, conversation_id, owner, rating, comment, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)", (feedback_id, conversation_id, owner, rating, comment, _now()))
+        await self.conn.commit()
+        return feedback_id
 
     async def create(self, conversation_id: str, owner: str, payload: dict) -> str:
         ticket_id, now = uuid.uuid4().hex, _now()
@@ -912,10 +939,19 @@ async def request_id_middleware(request: Request, call_next):
     if not re.fullmatch(r"[\w.-]{8,64}", request_id):
         request_id = uuid.uuid4().hex
     token = request_id_var.set(request_id)
-    try:
-        response = await call_next(request)
-    finally:
-        request_id_var.reset(token)
+    # Span raíz de la petición: los del grafo, los nodos, el LLM y las herramientas cuelgan de él.
+    with obs.tracer.start_as_current_span(f"{request.method} {request.url.path}", kind=SpanKind.SERVER,
+                                          attributes={"http.request.method": request.method,
+                                                      "url.path": request.url.path,
+                                                      "request.id": request_id}) as span:
+        try:
+            response = await call_next(request)
+        finally:
+            request_id_var.reset(token)
+        route = request.scope.get("route")
+        if route is not None:  # nombre con la plantilla de la ruta, sin identificadores
+            span.update_name(f"{request.method} {route.path}")
+        span.set_attribute("http.response.status_code", response.status_code)
     response.headers["X-Request-ID"] = request_id
     return response
 
@@ -1054,6 +1090,45 @@ async def turn_response(result: dict, conversation_id: str, owner: str, prior: i
     return ChatResponse(status="completed", response=result["messages"][-1].text, **common)
 
 
+CIRCUIT_OPEN_DETAIL = ("El asistente no está disponible en este momento porque el proveedor del modelo está "
+                       "fallando. Vuelve a intentarlo en unos segundos.")
+
+
+def guard_circuit() -> None:
+    """Con el circuito abierto, respuesta degradada inmediata (503) sin llamar al LLM."""
+    if not CIRCUIT.allow():
+        obs.CIRCUIT_REJECTED.inc()
+        raise HTTPException(status_code=503, detail=CIRCUIT_OPEN_DETAIL,
+                            headers={"Retry-After": str(CIRCUIT.retry_after())})
+
+
+def turn_failed(telemetry: obs.Telemetry) -> None:
+    """Un error del LLM cuenta para el circuit breaker; un error propio, no."""
+    kind = "llm" if telemetry.llm_failed else "internal"
+    obs.CHAT_ERRORS.labels(kind).inc()
+    obs.CHAT_REQUESTS.labels("error", "-").inc()
+    if telemetry.llm_failed:
+        CIRCUIT.record_failure()
+
+
+def record_turn(response: ChatResponse) -> None:
+    """Métricas de un turno completado o en espera de un operador."""
+    route, usage = response.agent, response.usage
+    obs.CHAT_REQUESTS.labels(response.status, route).inc()
+    obs.CHAT_LATENCY.labels(route).observe(usage.latency_ms / 1000)
+    obs.LLM_TOKENS.labels("input").inc(usage.input_tokens)
+    obs.LLM_TOKENS.labels("output").inc(usage.output_tokens)
+    obs.LLM_COST.inc(usage.cost_usd_estimate)
+    if route == "guardrail":
+        obs.GUARDRAIL_BLOCKS.inc()
+    if response.agents:
+        obs.AGENTS_PER_TURN.observe(len(response.agents))
+    if "knowledge" in response.agents:
+        obs.KNOWLEDGE_ANSWERS.labels("yes" if response.sources else "no").inc()
+    if response.critic:
+        obs.CRITIC_VERDICTS.labels(response.critic).inc()
+
+
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest, principal: Merchant) -> ChatResponse:
     if request.user_id != principal.sub:
@@ -1072,15 +1147,20 @@ async def chat(request: ChatRequest, principal: Merchant) -> ChatResponse:
         "user_id": principal.sub,  # identidad verificada: es la que reciben las herramientas
         "next_node": "",
     }
-    started = time.perf_counter()
+    guard_circuit()
+    started, telemetry = time.perf_counter(), obs.Telemetry()
     try:
         with get_usage_metadata_callback() as usage:  # tokens de cada llamada al LLM, por modelo
-            result = await graph.ainvoke(turn_input, thread_config(conversation_id))
+            result = await graph.ainvoke(turn_input, {**thread_config(conversation_id),
+                                                      "callbacks": [telemetry]})
         response = await turn_response(result, conversation_id, principal.sub, prior)
     except Exception as exc:
+        turn_failed(telemetry)
         logger.exception("Error procesando /chat (user=%s)", user_ref(principal.sub))
         raise HTTPException(status_code=500, detail="Error interno al procesar el mensaje.") from exc
+    CIRCUIT.record_success()
     response.usage = turn_usage(usage.usage_metadata, started)
+    record_turn(response)
     logger.info("Turno %s: agent=%s tools=%s tokens=%d coste=%.6f USD latencia=%d ms (user=%s)",
                 response.status, response.agent, ",".join(response.tools_used) or "-",
                 response.usage.total_tokens, response.usage.cost_usd_estimate, response.usage.latency_ms,
@@ -1105,6 +1185,39 @@ async def health_ready() -> JSONResponse:
     body = {"status": "ready" if state_db == "ok" else "not_ready", "state_db": state_db,
             "knowledge_base": "ready" if _knowledge is not None else "degraded"}
     return JSONResponse(body, status_code=200 if state_db == "ok" else 503)
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics(request: Request) -> Response:
+    """Métricas en formato Prometheus. Con METRICS_TOKEN definido, exige ese token (scrape autenticado)."""
+    expected = f"Bearer {METRICS_TOKEN}"
+    if METRICS_TOKEN and not hmac.compare_digest(request.headers.get("Authorization", ""), expected):
+        raise HTTPException(status_code=401, detail="Token de métricas no válido.")
+    if tickets is not None:
+        obs.PENDING_TICKETS.set(await tickets.count("pending"))
+    return Response(generate_latest(obs.REGISTRY), media_type=CONTENT_TYPE_LATEST)
+
+
+class FeedbackRequest(BaseModel):
+    conversation_id: str = Field(..., pattern=r"^[0-9a-f]{32}$")
+    rating: Literal["up", "down"]
+    comment: str = Field("", max_length=1000)
+
+
+class FeedbackResponse(BaseModel):
+    feedback_id: str
+    status: Literal["recorded"] = "recorded"
+
+
+@app.post("/feedback", response_model=FeedbackResponse, status_code=201)
+async def feedback(body: FeedbackRequest, principal: Merchant) -> FeedbackResponse:
+    """Valoración de una respuesta por su usuario. Solo sobre conversaciones propias (404 si no)."""
+    await owned_snapshot(body.conversation_id, principal.sub)
+    feedback_id = await tickets.add_feedback(body.conversation_id, principal.sub, body.rating, body.comment)
+    obs.FEEDBACK.labels(body.rating).inc()
+    logger.info("Feedback %s en la conversación %s (user=%s)", body.rating, body.conversation_id,
+                user_ref(principal.sub))  # el comentario no se registra en los logs
+    return FeedbackResponse(feedback_id=feedback_id)
 
 
 class ConversationMessage(BaseModel):
@@ -1198,19 +1311,23 @@ async def resolve_ticket(ticket_id: TicketId, body: ResolveRequest, principal: O
         raise HTTPException(status_code=422, detail=f"Decisión no válida para este ticket. Usa: {allowed}.")
     if body.decision == "reply" and not body.reply.strip():
         raise HTTPException(status_code=422, detail="La respuesta al cliente no puede estar vacía.")
+    guard_circuit()  # antes de tocar el ticket: con el circuito abierto, el operador reintenta después
     if not await tickets.start_resolution(ticket_id, principal.sub):
         raise HTTPException(status_code=409, detail=TICKET_CONFLICT)
 
     conversation_id = ticket["conversation_id"]
     snapshot = await graph.aget_state(thread_config(conversation_id))
+    telemetry = obs.Telemetry()
     try:
         result = await graph.ainvoke(Command(resume={"decision": body.decision, "reply": body.reply}),
-                                     thread_config(conversation_id))
+                                     {**thread_config(conversation_id), "callbacks": [telemetry]})
         turn = await turn_response(result, conversation_id, ticket["owner"], len(snapshot.values["messages"]))
     except Exception as exc:
         await tickets.finish(ticket_id, "claimed")  # se puede reintentar
+        turn_failed(telemetry)
         logger.exception("Error reanudando la conversación (ticket=%s)", ticket_id)
         raise HTTPException(status_code=500, detail="Error interno al reanudar la conversación.") from exc
+    CIRCUIT.record_success()
     await tickets.finish(ticket_id, "resolved", body.decision, body.reply)
     logger.info("Ticket %s resuelto (%s)", ticket_id, body.decision)
     return ResolveResponse(ticket_id=ticket_id, conversation_id=conversation_id,

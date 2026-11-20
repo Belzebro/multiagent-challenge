@@ -64,6 +64,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Configuración de Prometheus y reglas de alerta (promtool)
+        run: |
+          docker run --rm --entrypoint promtool -v "$PWD/ops/prometheus:/etc/prometheus:ro" \
+            prom/prometheus:v2.53.0 check config /etc/prometheus/prometheus.yml
+
       - uses: docker/setup-buildx-action@v4
 
       - name: Build

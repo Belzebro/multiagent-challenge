@@ -46,11 +46,13 @@ Evidencia: [evals/reports/retrieval.md](../../evals/reports/retrieval.md), las p
 
 ## F14: observabilidad (B)
 
-- [ ] **T-140** Spans de OpenTelemetry por petición, nodo, LLM y herramienta; Jaeger en un perfil de compose. → OBS2-01
-- [ ] **T-141** Métricas de Prometheus en `/metrics`. → OBS2-02
-- [ ] **T-142** Dashboard de Grafana y reglas de alerta, con un test de carga. → OBS2-03
-- [ ] **T-143** `POST /feedback`. → OBS2-04
-- [ ] **T-144** Circuit breaker para Groq. → OBS2-05
+Evidencia: [tests/test_telemetry.py](../../tests/test_telemetry.py) (13 pruebas), [observability.py](../../observability.py), [ops/](../../ops/) y la sección «Observabilidad» del [README](../../README.md).
+
+- [x] **T-140** Spans de OpenTelemetry por petición, grafo, nodo, LLM y herramienta, en una sola traza; exportación OTLP y Jaeger en el perfil `observability` de compose. → OBS2-01
+- [x] **T-141** Métricas de Prometheus en `/metrics`, con token opcional (`METRICS_TOKEN`): latencia de `/chat`, de los nodos y del LLM, rutas, bloqueos, errores, tokens, coste, tickets pendientes, abstención y fuentes. → OBS2-02
+- [x] **T-142** Dashboard de Grafana (16 paneles) y 10 reglas de alerta versionados; tests de que cargan y solo usan métricas reales, `promtool` en la CI, prueba de carga en la CI y `scripts/load_test.py`. → OBS2-03
+- [x] **T-143** `POST /feedback` sobre conversaciones propias, con métrica y alerta. → OBS2-04
+- [x] **T-144** Circuit breaker: 503 inmediato tras 3 fallos seguidos del LLM, petición de prueba a los 30 s y errores propios que no cuentan. → OBS2-05
 
 ## F15: producción, seguridad y memoria (C)
 
