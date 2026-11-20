@@ -79,8 +79,8 @@ def perturb(row: dict, kind: str, case: dict) -> str | None:
     return EVASIVE[lang]  # evasive
 
 
-def build_set(seed: int = 20261120) -> None:
-    report = json.loads((REPORTS / "system.json").read_text())
+def build_set(seed: int = 20261120, source: Path = REPORTS / "system.json") -> None:
+    report = json.loads(source.read_text())  # system.json, o system_partial.json tras la primera pasada
     cases = {c["id"]: c for name in ("golden.jsonl", "mixed.jsonl") for c in load_jsonl(name)}
     rows = [r for r in report["cases"] if r["run"] == 1 and r["status"] == "completed" and r["answer"]]
     rng = random.Random(seed)
@@ -126,6 +126,13 @@ def build_set(seed: int = 20261120) -> None:
 async def judge_set() -> None:
     items = {i["item"]: i for i in json.loads(ITEMS.read_text())["items"]}
     key = json.loads(KEY.read_text())
+    # Las respuestas reales ya tienen veredicto en system.json (su primera pasada): se reutiliza.
+    final = REPORTS / "system.json"
+    verdicts = {r["id"]: r["judge"] for r in json.loads(final.read_text())["cases"]
+                if r["run"] == 1} if final.exists() else {}
+    for k in key.values():
+        if k["control"] is None and not k.get("judge") and verdicts.get(k["case"]):
+            k["judge"] = verdicts[k["case"]]
     judge = Judge()
     todo = [item_id for item_id, k in key.items() if not k.get("judge") or "error" in k["judge"]]
 
@@ -222,9 +229,11 @@ def calibration_markdown(report: dict) -> str:
 def main_cli() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("command", choices=["build-set", "judge-set", "kappa"])
+    parser.add_argument("--source", type=Path, default=REPORTS / "system.json",
+                        help="Informe del que salen las respuestas reales (build-set).")
     args = parser.parse_args()
     if args.command == "build-set":
-        build_set()
+        build_set(source=args.source)
     elif args.command == "judge-set":
         asyncio.run(judge_set())
     else:

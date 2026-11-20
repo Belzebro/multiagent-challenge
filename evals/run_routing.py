@@ -21,6 +21,7 @@ from langchain_core.callbacks import get_usage_metadata_callback  # noqa: E402
 from langchain_core.messages import HumanMessage  # noqa: E402
 
 import main  # noqa: E402
+from evals.providers import provider_metadata, use_provider  # noqa: E402
 
 DATASET = "routing.jsonl"
 ROUTES = ("guardrail", "knowledge", "support")
@@ -148,14 +149,18 @@ def main_cli() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--pace", type=float, default=8.0, help="Segundos entre llamadas (plan gratuito).")
+    parser.add_argument("--provider", choices=["groq", "openrouter"], default="groq",
+                        help="Transporte del LLM: Groq u OpenRouter con el mismo modelo (providers.py).")
     args = parser.parse_args()
+    provider = use_provider(args.provider)
     cases = load_jsonl(DATASET)
     rows, per_run = [], []
     for n in range(1, args.runs + 1):
         run_rows, usage = asyncio.run(run(cases, args.pace, n))
         rows += run_rows
         per_run.append(summarize(run_rows, usage))
-    report = {"meta": {**metadata(DATASET, model=main.GROQ_MODEL), "runs": args.runs},
+    report = {"meta": {**metadata(DATASET, model=main.GROQ_MODEL), "runs": args.runs,
+                       "llm": provider_metadata(provider)},
               "summary": aggregate(per_run, rows), "per_run": per_run, "cases": rows}
     write_report("routing", report, markdown(report))
     s = report["summary"]

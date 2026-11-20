@@ -72,7 +72,9 @@ def test_el_juez_envia_la_rubrica_y_el_caso_y_cuenta_el_coste():
     assert passes(verdict, "correctness") and passes(verdict, "groundedness") is False
     request = client.requests[0]
     assert request["model"] == "claude-opus-5-5" and request["output_format"] is JudgeVerdict
-    assert "Rúbrica del juez" in request["system"] and "<evidence>" in request["messages"][0]["content"]
+    assert "Rúbrica del juez" in request["system"][0]["text"]
+    assert "<evidence>" in request["messages"][0]["content"]
+    assert request["system"][0]["cache_control"] == {"type": "ephemeral"}
     assert judge.usage == {"calls": 1, "input_tokens": 1000, "output_tokens": 200}
     assert judge.cost_usd() == 0.008  # 1000 × 4 + 200 × 20 por millón
 
@@ -153,3 +155,24 @@ def test_el_gate_solo_bloquea_con_dimensiones_del_juez_calibradas(tmp_path, monk
     assert gate.main([f"system={report}", f"calibration={calibration}"]) == 1  # calibrada: bloquea
     report.write_text(json.dumps({"summary": {"judge_groundedness": 0.95}}))  # falta errors
     assert gate.main([f"system={report}", f"calibration={calibration}"]) == 1
+
+
+# --- Proveedor alternativo de las evaluaciones --------------------------------------------------------
+def test_openrouter_recibe_los_mismos_mensajes_sin_parametros_propios_de_groq(monkeypatch):
+    from evals.providers import OpenRouterTransport
+
+    transport = OpenRouterTransport("sk-or-test", prefer=("groq",))
+    sent = {}
+
+    async def create(**kwargs):
+        sent.update(kwargs)
+        return SimpleNamespace(model_dump=lambda: {"provider": "Groq", "choices": [], "usage": {}})
+
+    monkeypatch.setattr(transport.client.chat.completions, "create", create)
+    messages = [{"role": "user", "content": "x"}]
+    data = asyncio.run(transport.create(model="openai/gpt-oss-120b", messages=messages, reasoning_format=None,
+                                        service_tier=None, temperature=0, tools=[]))
+    assert data["provider"] == "Groq" and transport.served_by == {"Groq": 1}
+    assert "reasoning_format" not in sent and "service_tier" not in sent  # nulos y propios de Groq fuera
+    assert sent["model"] == "openai/gpt-oss-120b" and sent["temperature"] == 0
+    assert sent["extra_body"] == {"provider": {"order": ["groq"], "allow_fallbacks": True}}

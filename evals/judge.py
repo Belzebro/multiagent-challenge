@@ -62,7 +62,9 @@ class Judge:
     async def __call__(self, question: str, reference: str, evidence: str, answer: str) -> dict:
         async with self.semaphore:
             response = await self.client.messages.parse(
-                model=JUDGE_MODEL, max_tokens=8000, system=self.system,
+                model=JUDGE_MODEL, max_tokens=8000,
+                # La rúbrica es igual en todas las llamadas: en caché, se lee a una fracción del precio.
+                system=[{"type": "text", "text": self.system, "cache_control": {"type": "ephemeral"}}],
                 messages=[{"role": "user", "content": render_item(question, reference, evidence, answer)}],
                 output_format=JudgeVerdict,
             )
