@@ -418,6 +418,7 @@ knowledge_llm = llm.bind_tools(knowledge_tools)
 # con lo que tenga. Se le pide sin herramientas: con tool_choice="none", Groq devuelve 400
 # (tool_use_failed) si el modelo intenta igualmente llamar a una.
 MAX_TOOL_CALLS_PER_TURN = 3
+TOOL_VALIDATION_ERROR = "tool call validation failed"  # error de Groq si se pide una herramienta inexistente
 FINAL_ANSWER_NOTE = ("Ya has consultado las herramientas el máximo de veces para este mensaje. "
                      "Responde ahora con la información obtenida y, si no encontraste el dato, dilo.")
 
@@ -507,7 +508,20 @@ async def call_agent(state: State, prompt: str, with_tools) -> AIMessage:
     messages = state["messages"]
     system = [SystemMessage(content=prompt), *summary_note(state), *task_note(state)]
     if tool_calls_this_step(state) < MAX_TOOL_CALLS_PER_TURN:
-        return await with_tools.ainvoke([*system, *recent_history(messages, state.get("summarized") or 0)])
+        history = recent_history(messages, state.get("summarized") or 0)
+        try:
+            return await with_tools.ainvoke([*system, *history])
+        except Exception as exc:
+            if TOOL_VALIDATION_ERROR not in str(exc).lower():
+                raise
+            # gpt-oss a veces pide herramientas de su entrenamiento (open_file) y Groq rechaza la petición
+            # entera (502). Se reintenta una vez recordándole las que existen. Fallo encontrado en la
+            # evaluación con el modelo real del 20/11/2026.
+            names = [t["function"]["name"] for t in getattr(with_tools, "kwargs", {}).get("tools", [])]
+            logger.warning("El modelo pidió una herramienta que no existe; se reintenta una vez.")
+            note = SystemMessage(content=f"Solo puedes usar estas herramientas: {', '.join(names)}. "
+                                         "No uses otras.")
+            return await with_tools.ainvoke([*system, note, *history])
     # Respuesta final sin herramientas: la pregunta y lo que devolvieron las herramientas, como texto.
     found = "\n\n".join(m.text for m in messages[step_start(state):] if isinstance(m, ToolMessage))
     note = f"{FINAL_ANSWER_NOTE}\n\nInformación obtenida con las herramientas:\n{found}"
@@ -690,6 +704,13 @@ async def supervisor_node(state: State) -> dict:
         logger.warning("Supervisor sin decisión válida (%s): se sintetiza.", result["parsing_error"])
         decision = SupervisorDecision(action="synthesize", reason="sin decisión válida")
     logger.info("Supervisor -> %s %s (%s)", decision.action, decision.agent or "", decision.reason)
+    if decision.action == "escalate" and not any(t["agent"] == "support" for t in plan):
+        # Una duda de información pública no necesita a una persona: si Knowledge no encontró el dato, la
+        # respuesta lo dice y sugiere contactar con Getnet. En la evaluación con el modelo real, el
+        # supervisor derivaba a un operador preguntas sin respuesta en la web.
+        logger.info("Supervisor: escalado sin incidencia del cliente; se responde sin derivar.")
+        decision = SupervisorDecision(action="finish" if len(findings) == 1 else "synthesize",
+                                      reason="sin incidencia que derivar")
 
     upcoming = next((t for t in plan if t["status"] == "pending"), None)
     if decision.action == "delegate" and decision.agent:

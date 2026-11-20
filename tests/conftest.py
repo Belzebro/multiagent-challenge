@@ -132,6 +132,13 @@ class FakeGroq:
             label = "SINTESIS_REVISADA" if revised else "SINTESIS"
             return completion(content=f"{label}<<{'+'.join(agents)}>>{invented}")
         if "search_getnet_knowledge" in tools:  # knowledge
+            if "fantasma" in low and "Solo puedes usar estas herramientas" not in system:
+                raise RuntimeError("Error code: 502 - Upstream error from Groq: Tool call validation failed: "
+                                   "attempted to call tool 'open_file' which was not in request.tools")
+            if "huerfana" in low:  # pregunta sin respuesta en la web: la búsqueda se abstiene
+                if not turn_tools:
+                    return completion(tool_calls=[("search_getnet_knowledge", {"query": "receta de paella"})])
+                return completion(content="No tengo esa información; contacta con el equipo comercial.")
             if "bucle" in low:  # el LLM no deja de buscar
                 query = {"query": f"intento {len(turn_tools)}"}
                 return completion(tool_calls=[("search_getnet_knowledge", query)])
@@ -164,7 +171,7 @@ class FakeGroq:
 
         if "bucle" in low:
             return decide("finish")
-        if "escalar" in low:
+        if "escalar" in low or "huerfana" in low:
             return decide("escalate")
         if "saltos" in low:  # cada vez pide una subtarea nueva al otro especialista: lo corta el tope
             done = re.findall(r"^- (knowledge|support) ·", system, re.MULTILINE)

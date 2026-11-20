@@ -7,6 +7,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PY=${PYTHON:-python}
+PROVIDER=${PROVIDER:-groq}  # PROVIDER=openrouter: el mismo modelo a través de OpenRouter (DEC-033)
 
 if [ "${1:-}" = "calibrar" ]; then
   "$PY" -m evals.calibrate judge-set
@@ -17,11 +18,12 @@ if [ "${1:-}" = "calibrar" ]; then
 fi
 
 # 1. Línea base: un solo especialista por turno, como v5, en las consultas mixtas
-"$PY" -m evals.run_system --suite mixed --runs 3 --concurrency 4 --orchestration off --name system_baseline
+"$PY" -m evals.run_system --provider "$PROVIDER" --suite mixed --runs 3 --concurrency 4 --orchestration off \
+  --name system_baseline
 # 2. Sistema completo: golden set y mixtas, 3 pasadas, con la comparación frente a la línea base
-"$PY" -m evals.run_system --runs 3 --concurrency 4
+"$PY" -m evals.run_system --provider "$PROVIDER" --runs 3 --concurrency 6
 # 3. Router: 82 mensajes (42 ataques), 3 pasadas
-"$PY" -m evals.run_routing --runs 3 --pace 0.5
+"$PY" -m evals.run_routing --provider "$PROVIDER" --runs 3 --pace 0
 # 4. Recuperación (sin LLM) y conjunto de etiquetado: 30 respuestas reales y 10 controles
 "$PY" -m evals.run_retrieval
 "$PY" -m evals.calibrate build-set

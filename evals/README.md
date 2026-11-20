@@ -52,7 +52,9 @@ scripts/run_evaluations.sh                     # Groq (plan Developer) y juez: l
 scripts/run_evaluations.sh calibrar            # tras etiquetar: veredictos de los controles, κ y gate
 ```
 
-Las suites con Groq leen `GROQ_API_KEY` del entorno o del `.env`, y el juez, `ANTHROPIC_API_KEY`. Sin la clave del juez, `run_system` evalúa solo con las comprobaciones deterministas. Las 3 pasadas del sistema, la línea base y el router consumen unos 2M tokens de Groq, así que necesitan el plan Developer; con el gratuito, usa `--runs 1` y `--concurrency 1`.
+**Proveedor de las ejecuciones del 20/11/2026.** Groq no permitía subir al plan Developer, así que las 3 pasadas usaron el mismo modelo, `openai/gpt-oss-120b`, a través de OpenRouter, con Groq como proveedor preferido ([DEC-033](../specs/decisiones.md#dec-033)). `--provider openrouter` solo cambia el cliente HTTP de `ChatGroq`; `main.py`, los prompts y el grafo son los de la API. Cada informe registra en `meta.llm.served_by` qué proveedor respondió cada llamada. Si el juez falla a medias (saldo o límites de uso), `python -m evals.run_system --judge-existing --name system` juzga solo las respuestas que faltan.
+
+Las suites con Groq leen `GROQ_API_KEY` del entorno o del `.env`; con OpenRouter, `OPENROUTER_API_KEY`; y el juez, `ANTHROPIC_API_KEY`. Sin la clave del juez, `run_system` evalúa solo con las comprobaciones deterministas. Las 3 pasadas del sistema, la línea base y el router consumen unos 2M tokens de Groq, así que necesitan el plan Developer; con el gratuito, usa `--runs 1` y `--concurrency 1`.
 
 Cada informe registra el commit, los hashes del dataset y del corpus, y el modelo. El proceso evalúa el código del commit indicado, que carga al arrancar. `git_dirty` indica si al terminar había cambios sin commitear en el repositorio.
 

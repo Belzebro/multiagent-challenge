@@ -161,6 +161,22 @@ def test_el_supervisor_escala_a_una_persona(client, auth, chat):
     assert done.json()["response"] == "[Agente humano] Te llamamos hoy"
 
 
+def test_una_duda_de_informacion_publica_no_se_escala_a_una_persona(chat):
+    """Fallo encontrado con el modelo real: el supervisor derivaba preguntas sin respuesta en la web."""
+    body = chat("Pregunta huerfana: ¿cuál fue el beneficio neto de Getnet en 2023?").json()
+    assert body["status"] == "completed" and body["ticket_id"] is None
+    assert body["response"].startswith("No tengo esa información")
+
+
+def test_si_el_modelo_pide_una_herramienta_inexistente_se_reintenta(chat, fake_groq):
+    """Fallo encontrado con el modelo real: gpt-oss pidió open_file y Groq rechazó la petición (502)."""
+    body = chat("Pregunta fantasma: ¿qué soluciones de pago online ofrece Getnet?").json()
+    assert body["status"] == "completed" and body["tools_used"] == ["search_getnet_knowledge"]
+    note = "Solo puedes usar estas herramientas"
+    retried = [r for r in fake_groq.requests if any(note in (m.get("content") or "") for m in r["messages"])]
+    assert retried and "search_getnet_knowledge" in retried[0]["messages"][1]["content"]
+
+
 def test_hitl_a_mitad_de_plan_continua_con_la_siguiente_subtarea(client, auth, chat):
     pending = chat("Caso mixto con reembolso de la TX-90412").json()
     assert pending["status"] == "pending_human" and pending["agents"] == []
