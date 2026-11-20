@@ -4,6 +4,7 @@ planificar → delegar entre especialistas → observar → replanificar → sin
 y humano o agente cuando hace falta.
 """
 
+import pytest
 from langchain_core.messages import HumanMessage, ToolMessage
 
 import main
@@ -221,7 +222,7 @@ def test_la_sintesis_descarta_lo_que_no_respaldan_las_pruebas(chat, fake_groq):
     # Se quitan la cifra y el correo inventados; una frase sin cifras pasa aunque su cita no esté
     # (limitación documentada).
     assert body["response"] == ("SINTESIS_REVISADA<<support+knowledge>>\n\n"
-                                "- DATO_RESPALDADO\n- DATO_SIN_CIFRAS")
+                                f"- DATO_RESPALDADO\n- DATO_SIN_CIFRAS\n\n{main.OMITTED_NOTE['es']}")
     # Lo quitado provoca una revisión determinista que dice qué se quitó, sin llamar al crítico LLM.
     assert body["critic"] == "approved_after_revision"
     assert len(calls_with_tool(fake_groq, "CriticVerdict")) == 1
@@ -271,3 +272,13 @@ def test_render_claims_une_parrafos_y_listas():
     assert main.render_claims(claims) == ("Tu terminal:\n\n- Está offline.\n- Tiene el error E-102."
                                           "\n\nAdemás, hay una actualización. "
                                           "Instálala cuando vuelva la conexión.")
+
+
+@pytest.mark.parametrize("text, lang", [
+    ("My terminal is offline, how do I set up the Wi-Fi?", "en"),
+    ("Meu terminal não conecta. Qual é a duração da bateria?", "pt"),
+    ("Mi terminal no conecta. ¿Cuánto dura la batería?", "es"),
+])
+def test_el_idioma_de_la_sintesis_distingue_el_portugues(text, lang):
+    """Con el modelo real, preguntas en portugués recibían la síntesis en español."""
+    assert main.text_language(text) == lang

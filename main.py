@@ -347,6 +347,21 @@ def is_english(text: str) -> bool:
     return sum(w in _ENGLISH_WORDS for w in words) >= other
 
 
+PT_WORDS = frozenset("não você vocês são também pelo pela às isso esse essa é uma com em dos das nos nas "
+                     "ao aos seu sua muito foi".split())
+ES_WORDS = frozenset("el los del también pero muy está son una con en las según usted puede hay es fue "
+                     "su".split())
+LANGUAGE_NAMES = {"en": "inglés", "pt": "portugués", "es": "español"}
+
+
+def text_language(text: str) -> str:
+    """"en", "pt" o "es", sin LLM: el detector de inglés de la recuperación y palabras frecuentes."""
+    if is_english(text):
+        return "en"
+    words = re.findall(r"\w+", text.lower())
+    return "pt" if sum(w in PT_WORDS for w in words) > sum(w in ES_WORDS for w in words) else "es"
+
+
 def reciprocal_rank_fusion(rankings: list[list[Document]]) -> list[Document]:
     """RRF: cada fragmento suma 1 / (RRF_K + posición) en cada ranking en el que aparece."""
     scores: dict[str, float] = {}
@@ -769,7 +784,9 @@ que han encontrado los especialistas y de las pruebas que devolvieron sus herram
 - Cada frase que dé un dato (estado, cifra, plazo, paso, producto, condición, causa o contacto) es de
   tipo `dato` y lleva en `quote` el fragmento de las PRUEBAS que la respalda, copiado literalmente en el
   idioma de las pruebas, sin traducirlo aunque la respuesta vaya en otro idioma. Si no encuentras ese
-  fragmento en las pruebas, no escribas la frase.
+  fragmento en las pruebas, no escribas la frase: di con una frase `sin_dato` que no tienes ese dato.
+- Responde a todas las partes de la pregunta. Si para una parte no hay datos en las pruebas, dilo con una
+  frase `sin_dato`; no la omitas.
 - Las frases sin datos van sin `quote`: `enlace` para una introducción, una transición o el título de una
   lista; `sin_dato` para decir que algo no se pudo resolver o sugerir contactar con Getnet.
 - No añadas pasos, rutas de menú, umbrales, tiempos ni conocimiento general (causas habituales,
@@ -788,6 +805,18 @@ NO_VERIFIED_ANSWER = {
     "es": "No he podido confirmar la respuesta con los datos disponibles. Puedes contactar con Getnet para "
           "revisarlo.",
     "en": "I couldn't confirm the answer with the available data. You can contact Getnet to review it.",
+    "pt": "Não consegui confirmar a resposta com os dados disponíveis. Você pode entrar em contato com a "
+          "Getnet para revisar.",
+}
+# Si la verificación quitó frases y la respuesta no dice qué falta, se dice aquí: en la evaluación con el
+# modelo real, la parte quitada desaparecía sin aviso y la respuesta dejaba de atender toda la pregunta.
+OMITTED_NOTE = {
+    "es": "No incluyo parte de lo que pedías porque no aparece en los datos disponibles; puedes consultarlo "
+          "con Getnet.",
+    "en": "I haven't included part of what you asked because it isn't in the available data; you can check "
+          "it with Getnet.",
+    "pt": "Não incluo parte do que você pediu porque não aparece nos dados disponíveis; você pode consultar "
+          "a Getnet.",
 }
 
 
@@ -876,9 +905,8 @@ async def synthesizer_node(state: State) -> dict:
         note += f"\n\nEl revisor pidió corregir: {state['review']}"
     # Los datos de Support llegan en español: sin esta nota, el modelo respondía en español a preguntas en
     # inglés. El idioma se decide sin LLM, con el mismo detector que la recuperación.
-    english = is_english(question.text)
-    language = "inglés" if english else "el idioma de la pregunta (español o portugués)"
-    note += f"\n\nEscribe la respuesta en {language}, aunque los hallazgos estén en otro idioma."
+    lang = text_language(question.text)
+    note += f"\n\nEscribe la respuesta en {LANGUAGE_NAMES[lang]}, aunque los hallazgos estén en otro idioma."
     result = await synthesis_llm.ainvoke([SystemMessage(content=SYNTHESIZER_PROMPT),
                                           SystemMessage(content=note), question])
     synthesis: Synthesis | None = result["parsed"]
@@ -892,7 +920,9 @@ async def synthesizer_node(state: State) -> dict:
     if dropped:
         logger.info("Síntesis: %d de %d frases descartadas por no estar en las pruebas",
                     len(dropped), len(synthesis.claims))
-    answer = render_claims(kept) or NO_VERIFIED_ANSWER["en" if english else "es"]
+        if kept and not any(c.kind == "sin_dato" for c in kept):
+            kept.append(Claim(kind="sin_dato", text=OMITTED_NOTE[lang]))
+    answer = render_claims(kept) or NO_VERIFIED_ANSWER[lang]
     return {"messages": [AIMessage(content=answer)], "dropped_claims": [c.text for c in dropped]}
 
 

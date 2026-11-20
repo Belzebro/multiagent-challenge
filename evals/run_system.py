@@ -45,10 +45,6 @@ ABSTENTION = re.compile(  # formas reales de abstención vistas en las ejecucion
     r"no (information|data) (about|on)|"
     r"não (tenho|encontrei|encontro|há (dados|informação)|está disponível|consta)|não foi encontrad|"
     r"não (inclui|contém)", re.IGNORECASE)
-PT_WORDS = frozenset("não você vocês são também pelo pela às isso esse essa é uma com em dos das nos nas "
-                     "ao aos seu sua muito foi".split())
-ES_WORDS = frozenset("el los del también pero muy está son una con en las según usted puede hay es fue "
-                     "su".split())
 
 
 def norm(text: str) -> str:
@@ -61,10 +57,7 @@ def has_any(answer: str, facts: list[str]) -> bool:
 
 
 def answer_language(text: str) -> str:
-    if main.is_english(text):
-        return "en"
-    words = re.findall(r"\w+", text.lower())
-    return "pt" if sum(w in PT_WORDS for w in words) > sum(w in ES_WORDS for w in words) else "es"
+    return main.text_language(text)  # el mismo detector que usa el sintetizador
 
 
 def load_cases(suites: list[str]) -> list[dict]:
