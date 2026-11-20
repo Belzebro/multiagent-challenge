@@ -154,11 +154,17 @@ def main_cli() -> None:
     args = parser.parse_args()
     provider = use_provider(args.provider)
     cases = load_jsonl(DATASET)
-    rows, per_run = [], []
-    for n in range(1, args.runs + 1):
-        run_rows, usage = asyncio.run(run(cases, args.pace, n))
-        rows += run_rows
-        per_run.append(summarize(run_rows, usage))
+    async def all_runs() -> tuple[list[dict], list[dict]]:
+        # Un solo bucle de eventos para todas las pasadas: el cliente HTTP del LLM queda ligado al bucle en
+        # el que se creó, y con un asyncio.run por pasada fallaba la primera llamada de las siguientes.
+        rows, per_run = [], []
+        for n in range(1, args.runs + 1):
+            run_rows, usage = await run(cases, args.pace, n)
+            rows += run_rows
+            per_run.append(summarize(run_rows, usage))
+        return rows, per_run
+
+    rows, per_run = asyncio.run(all_runs())
     report = {"meta": {**metadata(DATASET, model=main.GROQ_MODEL), "runs": args.runs,
                        "llm": provider_metadata(provider)},
               "summary": aggregate(per_run, rows), "per_run": per_run, "cases": rows}

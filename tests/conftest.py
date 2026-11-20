@@ -118,6 +118,9 @@ class FakeGroq:
         if "SupervisorDecision" in tools:
             return self.supervisor(low, system)
         if "CriticVerdict" in tools:
+            if "inventa" in low and "SINTESIS_REVISADA" not in system:  # aprueba, pero lista datos sin apoyo
+                verdict = {"verdict": "approve", "unsupported": ["ruta de menú Ajustes > Red"]}
+                return completion(tool_calls=[("CriticVerdict", verdict)])
             revise = "rechazo" in low or ("critica" in low and "SINTESIS_REVISADA" not in system)
             verdict = {"verdict": "revise", "issues": "falta citar la fuente"} if revise else {}
             return completion(tool_calls=[("CriticVerdict", verdict or {"verdict": "approve"})])

@@ -142,6 +142,16 @@ def test_la_sintesis_declara_las_subtareas_que_no_se_hicieron(chat, fake_groq):
     assert "no se pudieron hacer" in note and "Buscar D" in note
 
 
+def test_si_el_critico_enumera_datos_sin_respaldo_la_revision_es_obligatoria(chat, fake_groq):
+    """Fallo encontrado con el modelo real: el crítico aprobaba respuestas con conocimiento general."""
+    body = chat("Caso inventa: mi terminal no conecta y quiero la guía").json()
+    assert body["critic"] == "approved_after_revision"
+    revision = synthesizer_calls(fake_groq)[1]
+    note = next(m["content"] for m in revision["messages"]
+                if "El revisor pidió corregir" in (m.get("content") or ""))
+    assert "Quita lo que no está en las pruebas: ruta de menú Ajustes > Red" in note
+
+
 def test_el_critico_rechaza_citas_sin_fuentes_sin_llamar_al_llm(chat, fake_groq):
     """Fallo encontrado con el modelo real: la síntesis citaba [1] sin ninguna búsqueda en el turno."""
     body = chat("Caso citafalsa: terminal y cobros").json()
