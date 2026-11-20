@@ -14,7 +14,7 @@ Registro *append-only*: una decisión no se borra; si cambia, se añade otra que
 | [DEC-008](#dec-008) | 2026-11-13 | Trabajar con SDD en `specs/` | Aceptada | Usuario |
 | [DEC-009](#dec-009) | 2026-11-13 | Objetivo: superar la re-evaluación de hoy | Aceptada | Usuario |
 | [DEC-010](#dec-010) | 2026-11-13 | Plan gratuito de Groq: CI sin LLM y evaluaciones con presupuesto | Aceptada | Usuario y técnica |
-| [DEC-011](#dec-011) | 2026-11-13 | Juez LLM sin calibración humana, orientativo | Aceptada | Usuario |
+| [DEC-011](#dec-011) | 2026-11-13 | Juez LLM sin calibración humana, orientativo | Reemplazada por DEC-029 | Usuario |
 | [DEC-012](#dec-012) | 2026-11-13 | Claude crea ramas, hace push y abre PRs | Aceptada | Usuario |
 | [DEC-013](#dec-013) | 2026-11-13 | Reordenar las fases por la fecha límite | Reemplazada por DEC-020 | Técnica, aprobada |
 | [DEC-014](#dec-014) | 2026-11-13 | Postgres para checkpoints y tickets | Reemplazada por DEC-019 | Técnica, aprobada |
@@ -27,6 +27,13 @@ Registro *append-only*: una decisión no se borra; si cambia, se añade otra que
 | [DEC-021](#dec-021) | 2026-11-13 | Claude hace squash merge a `main` con la CI en verde | Aceptada | Usuario |
 | [DEC-022](#dec-022) | 2026-11-13 | Docker local con Colima | Aceptada | Usuario |
 | [DEC-023](#dec-023) | 2026-11-13 | Correcciones que encontró la evaluación: bucle ReAct acotado, comprobador y router | Aceptada | Técnica, por la evaluación |
+| [DEC-024](#dec-024) | 2026-11-19 | Iteración 2: objetivo 9.5 y entrega antes del 20/11 a las 18:00 | Aceptada | Usuario |
+| [DEC-025](#dec-025) | 2026-11-19 | Orquestación: plan en el router, supervisor, crítico y sintetizador | Aceptada | Usuario y técnica |
+| [DEC-026](#dec-026) | 2026-11-19 | Los agentes siguen en Groq; Claude solo como juez | Propuesta (Q-012) | Técnica |
+| [DEC-027](#dec-027) | 2026-11-19 | RAG multilingüe con un índice adicional fusionado con MiniLM | Aceptada | Usuario y técnica |
+| [DEC-028](#dec-028) | 2026-11-19 | Groq Developer para las evaluaciones del sistema | Propuesta (Q-012) | Técnica |
+| [DEC-029](#dec-029) | 2026-11-19 | Calibración humana del juez con etiquetas del usuario | Aceptada | Usuario |
+| [DEC-030](#dec-030) | 2026-11-19 | Claude sigue con ramas, push y merge con la CI en verde | Aceptada | Usuario |
 
 ---
 
@@ -206,3 +213,61 @@ Estado: **Reemplazada por [DEC-018](#dec-018)** (aprobada en [Q-010](preguntas.m
   - El comprobador normaliza el texto y acepta el formato de cita de gpt-oss.
   - El prompt del router aclara que los datos públicos de la propia empresa son `knowledge`.
 - Consecuencias: el agente siempre termina con una respuesta. Las ejecuciones anteriores se conservan como evidencia; la evaluación de routing y la de respuestas se repiten sobre el código corregido.
+
+### DEC-024
+
+**Iteración 2: objetivo de 9.5/10 y entrega antes del 2026-11-20 a las 18:00 (Ciudad de México).**
+
+- Contexto: la re-evaluación dio 8.3/10 y la empresa espera 9.5 ([Q-011](preguntas.md#q-011)).
+- Consecuencias: specs propias en [iteracion-2/](iteracion-2/), con fases, calendario y línea de corte.
+
+### DEC-025
+
+**Orquestación: el router devuelve también un plan de subtareas; después de cada especialista, un supervisor observa y replanifica; para las consultas mixtas hay sintetizador y crítico.**
+
+- Contexto: es la brecha de más peso (Orchestration, 15 %, nota 6.8). El feedback pide descomposición, colaboración entre especialistas, crítica, síntesis, replanificación y parada adaptativa ([Q-014](preguntas.md#q-014)).
+- Alternativas descartadas:
+  - Especialistas como herramientas de un supervisor: el plan y la crítica quedarían implícitos dentro de un LLM.
+  - Especialistas en paralelo: no hay observar → replanificar.
+- Consecuencias: el contrato `next_node` + `add_conditional_edges` se mantiene. Una vía rápida evita llamadas extra en las consultas de una sola intención.
+
+### DEC-026
+
+Estado: **Propuesta**, pendiente de [Q-012](preguntas.md#q-012).
+
+**Los agentes siguen usando `ChatGroq`; Claude (Opus 5.5) se usa solo como juez independiente en `evals/`.**
+
+- Razones:
+  - El enunciado exige `ChatGroq`.
+  - Los fallos que quedan son de recuperación, no del modelo.
+  - Groq es más barato y más rápido para los agentes.
+  - Un juez de otra familia es lo que pide el feedback.
+
+### DEC-027
+
+**RAG multilingüe: un índice multilingüe adicional fusionado (RRF) con el de `all-MiniLM-L6-v2`, que se mantiene por el contrato.**
+
+- Alternativas descartadas:
+  - Traducir la consulta: sigue dependiendo del modelo.
+  - Sustituir MiniLM: rompe el contrato.
+  - Indexar solo las páginas en español: con MiniLM no mejora las consultas en español.
+- Consecuencias: la imagen crece unos 0,5 GB y el arranque tarda algo más.
+
+### DEC-028
+
+Estado: **Propuesta**, pendiente de [Q-012](preguntas.md#q-012).
+
+**Groq Developer (pago por uso) para las evaluaciones del sistema.**
+
+- Contexto: el golden set, la batería adversarial y las 3 pasadas necesitan unos 1,5–2M tokens de `gpt-oss-120b`, frente a 200K al día en el plan gratuito.
+
+### DEC-029
+
+**El juez se calibra con etiquetas del usuario (reemplaza a [DEC-011](#dec-011)).**
+
+- Contexto: las etiquetas de respaldo y de utilidad no requieren conocimiento del negocio, porque el etiquetador ve la pregunta, el texto recuperado y la respuesta ([Q-013](preguntas.md#q-013)).
+- Consecuencias: κ de Cohen por dimensión. El juez solo bloquea en las dimensiones con κ ≥ 0.6; las demás quedan como orientativas, y así se declara.
+
+### DEC-030
+
+**Claude sigue creando ramas, haciendo push y merge a `main` con la CI en verde en la iteración 2 ([Q-015](preguntas.md#q-015)).**

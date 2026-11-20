@@ -12,3 +12,4 @@ Principios no negociables. Si una tarea entra en conflicto con alguno, se detien
 8. **Presupuesto explícito.** Con el plan gratuito de Groq, cada ejecución con el modelo real declara su coste estimado en tokens antes de lanzarse.
 9. **`main` siempre entregable.** Cada fase entra por PR con la CI en verde. Si se acaba el tiempo, `main` contiene solo fases completas.
 10. **Limitaciones a la vista.** Lo que no se hizo, o se hizo con límites, se declara junto con su motivo.
+11. **Complejidad proporcional al valor.** Cada pieza nueva se justifica con una medición. Si añade coste o latencia, tiene una vía rápida o se puede desactivar. *Origen: Engineering Judgment del feedback de la re-evaluación.*
