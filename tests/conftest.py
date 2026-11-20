@@ -147,6 +147,8 @@ class FakeGroq:
                 return completion(tool_calls=[("search_getnet_knowledge", query)])
             if not turn_tools:
                 return completion(tool_calls=[("search_getnet_knowledge", {"query": "online payments"})])
+            if "marcas" in low:  # gpt-oss cita con su formato interno en lugar de [1]
+                return completion(content="Getnet ofrece pagos online【1†L1-L4】 y TPV【2】 (ver 【Guía】).")
             context = turn_tools[-1]["content"][:160].replace("\n", " ")
             return completion(content="KNOWLEDGE<<" + context + ">>")
         if "check_terminal_connection" in tools:  # support

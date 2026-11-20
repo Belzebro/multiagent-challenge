@@ -833,6 +833,15 @@ def turn_evidence(state: State) -> str:
 CITATION = re.compile(r"[\[【]\d+[\]】†]")  # [1], 【1】 o 【1†L1-L7】 (formato de cita de gpt-oss)
 UNSOURCED_CITATIONS = ("La respuesta cita fuentes, pero en este turno no se recuperó ninguna: "
                        "quita las citas y lo que dependa de ellas.")
+MODEL_CITATION = re.compile(r"【(\d+)(?:†[^】]*)?】")
+MODEL_LABEL = re.compile(r"【([^】†]*)(?:†[^】]*)?】")
+
+
+def clean_citations(text: str) -> str:
+    """gpt-oss cita con su formato interno (【1†L1-L7】) aunque el prompt pide [1]. Al comercio le llega
+    [1], que remite al fragmento numerado de la búsqueda, y cualquier otra etiqueta entre 【】 sin los
+    corchetes. Lo detectó el etiquetado humano: estaba en el 65 % de las respuestas del informe final."""
+    return MODEL_LABEL.sub(lambda m: m.group(1).strip(), MODEL_CITATION.sub(r"[\1]", text))
 
 
 async def critic_node(state: State) -> dict:
@@ -1276,7 +1285,7 @@ async def turn_response(result: dict, conversation_id: str, owner: str, prior: i
         logger.info("Conversación en espera de un operador (ticket=%s, user=%s)", ticket_id, user_ref(owner))
         return ChatResponse(status="pending_human", response=PENDING_REPLY, ticket_id=ticket_id, **common)
     # .text devuelve solo el texto, aunque el mensaje incluya bloques de razonamiento.
-    return ChatResponse(status="completed", response=result["messages"][-1].text, **common)
+    return ChatResponse(status="completed", response=clean_citations(result["messages"][-1].text), **common)
 
 
 CIRCUIT_OPEN_DETAIL = ("El asistente no está disponible en este momento porque el proveedor del modelo está "
@@ -1444,7 +1453,7 @@ async def get_conversation(conversation_id: ConversationId, principal: Merchant)
         if isinstance(m, HumanMessage):
             messages.append(ConversationMessage(role="user", content=m.text))
         elif isinstance(m, AIMessage) and m.text:
-            reply = ConversationMessage(role="assistant", content=m.text)
+            reply = ConversationMessage(role="assistant", content=clean_citations(m.text))
             if messages and messages[-1].role == "assistant":
                 messages[-1] = reply  # en cada turno solo se muestra la respuesta final, no las intermedias
             else:

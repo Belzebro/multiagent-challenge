@@ -46,6 +46,8 @@ Evidencia: [evals/reports/system.md](../../evals/reports/system.md), [system_bas
 - [x] **T-134** Orquestación frente a un solo especialista (`ORCHESTRATION=off`, como v5): cobertura, juez, latencia, tokens y coste. → EVAL2-06
 - [x] **T-135** Gate con los umbrales del sistema y del router de la ejecución final; las dimensiones del juez solo bloquean con κ ≥ 0.6. → EVAL2-03 a EVAL2-06
 - [x] **T-136** Fallos encontrados por las evaluaciones y corregidos con su test: idioma de la síntesis, pasos inventados por Support, herramienta inexistente pedida por gpt-oss, escalado de preguntas públicas, inyección con etiquetas de rol, y comprobación de abstención y bucle del router en el arnés. → EVAL2-05
+- [x] **T-137** Calibración con las 40 etiquetas humanas: κ de 0.84 en «responde a todo», que bloquea el gate; correcta 0.49, respaldada 0.21, útil y segura 0, que se informan. El juez detecta los 10 controles y la persona, 4. → EVAL2-04
+- [x] **T-138** Fallo encontrado por el etiquetado humano: el formato de cita interno de gpt-oss (`【1†L1-L7】`) salía en 120 de 186 respuestas. La API, el historial y los runners lo normalizan a `[1]`, con test; aplicado a las respuestas grabadas, no cambia ninguna comprobación. → EVAL2-05
 
 ## F14: observabilidad (B)
 
@@ -70,4 +72,4 @@ Evidencia: [tests/test_postgres.py](../../tests/test_postgres.py), [tests/test_p
 
 - [x] **T-160** README: novedades de la iteración 2 (brecha → qué se hizo → evidencia), tabla patrón → test y resultados con el modelo real.
 - [x] **T-161** Specs al día (Q-012, DEC-031 a DEC-033) e informes finales versionados.
-- [ ] **T-162** Tag `v6-reevaluacion` con la CI de `main` en verde.
+- [x] **T-162** Tag `v6-reevaluacion` con la CI de `main` en verde.

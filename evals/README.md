@@ -60,6 +60,6 @@ Cada informe registra el commit, los hashes del dataset y del corpus, y el model
 
 ## Limitaciones
 
-- La calibración del juez la hace una sola persona, sin conocimiento experto del negocio. Por eso etiqueta con la referencia y las pruebas delante, igual que el juez ([DEC-029](../specs/decisiones.md#dec-029)), y el κ mide el acuerdo con esa persona, no con un experto.
+- La calibración del juez la hace una sola persona, sin conocimiento experto del negocio. Por eso etiqueta con la referencia y las pruebas delante, igual que el juez ([DEC-029](../specs/decisiones.md#dec-029)), y el κ mide el acuerdo con esa persona, no con un experto. En la calibración del 20/11/2026 la persona no marcó ningún fallo de utilidad ni de seguridad y detectó 4 de los 10 controles (el juez, los 10), así que solo «responde a todo» (κ de 0.84) bloquea el gate. El análisis de los desacuerdos está en el [README](../README.md#evaluación-con-el-modelo-real).
 - Tres pasadas estiman la variación del modelo, pero no dan intervalos de confianza estrechos: con 41 preguntas con respuesta, un caso vale unos 2,4 puntos.
 - Las consultas de recuperación se escribieron mirando las páginas, lo que puede favorecer la coincidencia de vocabulario.

@@ -136,7 +136,7 @@ async def run_case(graph, case: dict, run: int, semaphore: asyncio.Semaphore, pa
         messages = result["messages"]
         row.update(
             status="pending_human" if paused else "completed",
-            answer="" if paused else messages[-1].text,
+            answer="" if paused else main.clean_citations(messages[-1].text),  # lo que entrega la API
             sources=list(dict.fromkeys(url for m in messages if isinstance(m, ToolMessage)
                                        and m.name == "search_getnet_knowledge" for url in m.artifact or [])),
             evidence=main.turn_evidence({"messages": messages}),
