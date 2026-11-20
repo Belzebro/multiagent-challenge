@@ -16,6 +16,7 @@ os.environ.setdefault("GROQ_API_KEY", "test-key-never-sent")
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-never-sent")  # el juez de evals/ nunca llama en tests
 os.environ.setdefault("JWT_SECRET", "pytest-only-secret-0123456789abcdef-0123456789")
 os.environ.setdefault("STATE_DB", ":memory:")  # cada TestClient arranca con un estado vacío
+os.environ.setdefault("RATE_LIMIT_PER_MINUTE", "1000")  # los tests que lo prueban lo bajan
 
 import jwt  # noqa: E402
 import pytest  # noqa: E402
@@ -120,6 +121,8 @@ class FakeGroq:
             revise = "rechazo" in low or ("critica" in low and "SINTESIS_REVISADA" not in system)
             verdict = {"verdict": "revise", "issues": "falta citar la fuente"} if revise else {}
             return completion(tool_calls=[("CriticVerdict", verdict or {"verdict": "approve"})])
+        if not tools and main.SUMMARY_PROMPT in system:  # memoria: resumen de los mensajes antiguos
+            return completion(content=f"RESUMEN<<{user.count('Cliente:')} mensajes del cliente>>")
         if not tools and main.FINAL_ANSWER_NOTE in system:
             return completion(content="RESPUESTA_FINAL_SIN_HERRAMIENTAS")  # tope de herramientas del turno
         if not tools and main.SYNTHESIZER_PROMPT in system:

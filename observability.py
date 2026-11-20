@@ -75,6 +75,8 @@ CIRCUIT_OPEN = Gauge("getnet_circuit_open", "1 si el circuit breaker del LLM est
                      registry=REGISTRY)
 CIRCUIT_REJECTED = Counter("getnet_circuit_rejected", "Turnos rechazados con el circuito abierto.",
                            registry=REGISTRY)
+RATE_LIMITED = Counter("getnet_rate_limited", "Turnos rechazados por el límite de uso por usuario (429).",
+                       registry=REGISTRY)
 
 
 # --- Trazas y métricas por ejecución del grafo (callbacks de LangChain) -------------------------------

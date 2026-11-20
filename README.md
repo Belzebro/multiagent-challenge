@@ -42,10 +42,11 @@ La iteración 1 dejó fuera, por decisión registrada, la colaboración y replan
 3. [Uso de la API](#uso-de-la-api)
 4. [Arquitectura de orquestación](#arquitectura-de-orquestación)
 5. [Pipeline RAG](#pipeline-rag)
-6. [Observabilidad](#observabilidad)
-7. [Bonus Challenges implementados](#bonus-challenges-implementados)
-8. [Estrategia de pruebas de integración](#estrategia-de-pruebas-de-integración)
-9. [Limitaciones y siguientes pasos](#limitaciones-y-siguientes-pasos)
+6. [Producción: varias réplicas, límites y memoria larga](#producción-varias-réplicas-límites-y-memoria-larga)
+7. [Observabilidad](#observabilidad)
+8. [Bonus Challenges implementados](#bonus-challenges-implementados)
+9. [Estrategia de pruebas de integración](#estrategia-de-pruebas-de-integración)
+10. [Limitaciones y siguientes pasos](#limitaciones-y-siguientes-pasos)
 
 ## Estructura del proyecto
 
@@ -65,7 +66,7 @@ La iteración 1 dejó fuera, por decisión registrada, la colaboración y replan
 ├── requirements-dev.txt # pytest, ruff y lo que solo usan las evaluaciones (juez y BM25)
 ├── pyproject.toml       # Configuración de ruff y pytest
 ├── Dockerfile           # Imagen basada en python:3.11-slim
-├── docker-compose.yml   # API; con --profile observability, también Jaeger, Prometheus y Grafana
+├── docker-compose.yml   # API; perfiles postgres (estado compartido) y observability (Jaeger, Prometheus, Grafana)
 ├── .env.example         # Plantilla de configuración
 ├── .dockerignore        # Mantiene secretos y artefactos locales fuera del build
 └── .gitignore
@@ -167,9 +168,10 @@ La primera ejecución descarga el modelo `all-MiniLM-L6-v2` (unos 90 MB) en `~/.
 
 ### Autenticación
 
-Cada petición a `/chat` lleva un JWT en la cabecera `Authorization: Bearer <token>`. La API verifica la firma (HS256), el emisor, la audiencia y la caducidad, y toma la identidad del claim `sub`. El claim `role` debe ser `merchant`.
+Cada petición a `/chat` lleva un JWT en la cabecera `Authorization: Bearer <token>`. La API verifica la firma, el emisor, la audiencia y la caducidad, y toma la identidad del claim `sub`. El claim `role` debe ser `merchant`.
 
-En desarrollo, los tokens se emiten con el script incluido; en producción los emitiría el proveedor de identidad:
+- **Producción (OIDC).** Con `JWT_JWKS_URL`, la firma es RS256 y la clave pública sale del JWKS del proveedor según el `kid` del token. Las claves se cachean y se vuelven a leer cuando el proveedor las rota. Solo se acepta RS256, así que un token HS256 bien firmado se rechaza. Si el proveedor no responde, la API devuelve `503`, no `401`.
+- **Desarrollo.** Sin `JWT_JWKS_URL`, se usa HS256 con `JWT_SECRET`, y los tokens se emiten con el script incluido:
 
 ```bash
 TOKEN=$(docker compose exec -T api python scripts/issue_token.py --sub user-123)
@@ -212,6 +214,7 @@ Incluye la cabecera `X-Request-ID`, el mismo identificador que aparece en los lo
 - `404`: el `conversation_id` no existe o es de otro usuario (no se distingue entre ambos casos).
 - `409`: la conversación está esperando la decisión de un operador.
 - `422`: la petición no supera la validación.
+- `429`: el usuario superó su límite de turnos por minuto (`RATE_LIMIT_PER_MINUTE`, 20 por defecto), con `Retry-After`. Se comprueba antes de llamar al LLM.
 - `500`: falla el LLM u otro componente. La respuesta es `{"detail": "Error interno al procesar el mensaje."}`; el detalle queda en los logs y nunca se expone al cliente.
 - `503`: el circuit breaker del LLM está abierto, tras 3 turnos seguidos con un fallo de Groq. La respuesta llega al instante, sin llamar al modelo, e incluye `Retry-After` con los segundos que faltan; pasados 30 s se deja pasar una petición de prueba ([Observabilidad](#observabilidad)).
 
@@ -300,8 +303,9 @@ curl -s -X POST http://localhost:8000/chat \
 curl -s http://localhost:8000/conversations/<conversation_id> -H "Authorization: Bearer $TOKEN"  # historial
 ```
 
-- El historial se guarda con un checkpointer de LangGraph sobre SQLite (`STATE_DB`; en compose, un volumen), así que sobrevive a los reinicios.
-- Cada agente recibe una ventana con los últimos 20 mensajes. El router recibe además la respuesta anterior como contexto, para interpretar mensajes cortos de seguimiento.
+- El historial se guarda con un checkpointer de LangGraph sobre SQLite (`STATE_DB`; en compose, un volumen), así que sobrevive a los reinicios. Con `DATABASE_URL`, va a Postgres y lo comparten varias réplicas (ver [Producción](#producción-varias-réplicas-límites-y-memoria-larga)).
+- **Resumen en lugar de recorte.** Cada agente recibe los mensajes que aún no están resumidos. Cuando pasan de 30, los más antiguos se resumen con el LLM, dejando completos los 20 últimos, y el resumen llega a los agentes como contexto. Así, una conversación larga no olvida el terminal o la transacción del principio. El resumen se pide en paralelo con el router, así que no añade latencia al turno.
+- El router recibe además la respuesta anterior como contexto, para interpretar mensajes cortos de seguimiento.
 - Solo el dueño de la conversación (el `sub` del token) la puede leer o continuar. Si no es suya o no existe, la API responde 404 en ambos casos, para no revelar qué identificadores existen.
 
 ### Supervisión humana (HITL)
@@ -432,7 +436,7 @@ La respuesta de `/chat` incluye `agents` (los especialistas que intervinieron, e
 ### Decisiones de diseño
 
 - **Complejidad proporcional al valor.** La colaboración solo se activa cuando el plan lo necesita. Una consulta de una sola intención hace las mismas llamadas al LLM que en la versión anterior: router y especialista.
-- **Grafo compilado una vez, al arrancar,** con un checkpointer de SQLite: cada `conversation_id` es un `thread_id` de LangGraph. El plan y los hallazgos viven en el checkpoint, así que un HITL a mitad de plan se reanuda donde estaba. Con varias réplicas bastaría con mover el checkpointer y los tickets a Postgres ([DEC-019](specs/decisiones.md#dec-019)).
+- **Grafo compilado una vez, al arrancar,** con un checkpointer de SQLite, o de Postgres con `DATABASE_URL`: cada `conversation_id` es un `thread_id` de LangGraph. El plan y los hallazgos viven en el checkpoint, así que un HITL a mitad de plan se reanuda donde estaba, en cualquier réplica.
 - **Asíncrona de extremo a extremo:** el endpoint, `graph.ainvoke` y los nodos son `async`. Las herramientas síncronas (FAISS y embeddings) se ejecutan en un pool de hilos a través de `tool.ainvoke`.
 - **Una sola instancia de LLM:** un único `ChatGroq`, reutilizado con `with_structured_output` (router, supervisor y crítico) y con `bind_tools` (especialistas).
 - **Un worker de uvicorn por contenedor.** Cada worker cargaría su propio modelo y su propio índice; para escalar se añaden réplicas.
@@ -541,6 +545,17 @@ def search(self, query: str, k: int = 4) -> list[Document]:          # Knowledge
 - **Holdout escrito mirando las páginas.** Puede favorecer la coincidencia de vocabulario, y el umbral se calibró con el mismo holdout; la validación cruzada estima cuánto se generaliza.
 - **Sin reranker.** El recall@4 desplegado es de 0.90 y los fallos que quedan son de páginas genéricas (quiénes somos, grandes empresas). Un cross-encoder solo se añadiría si la evaluación de respuestas mostrara que hacen falta.
 - **Snapshot.** Hay que refrescarlo cuando cambie la web (`python scripts/ingest.py`) y volver a lanzar las evaluaciones.
+
+## Producción: varias réplicas, límites y memoria larga
+
+| Pieza | Qué hace | Evidencia |
+|---|---|---|
+| Estado compartido | Con `DATABASE_URL`, el checkpointer de LangGraph (`AsyncPostgresSaver`) y las tablas de tickets, feedback y límites van a Postgres. Una conversación empezada en una réplica sigue en otra, y un ticket de HITL creado en una se reclama y se resuelve en otra. El `UPDATE` condicionado hace atómica la reclamación entre réplicas. Sin `DATABASE_URL`, todo sigue en SQLite | [test_postgres.py](tests/test_postgres.py): dos instancias contra el Postgres de servicio de la CI |
+| Límite de uso | 20 turnos por usuario y minuto por defecto. Se cuentan con un único `UPSERT` atómico en la base de datos, así que el límite es global entre réplicas. Se responde `429` con `Retry-After` antes de llamar al LLM | [test_production.py](tests/test_production.py) |
+| OIDC | RS256 con las claves públicas del proveedor (`JWT_JWKS_URL`). Rechaza los tokens HS256, los de `kid` desconocido, los firmados con otra clave y los caducados; responde `503` si el proveedor no responde | [test_production.py](tests/test_production.py) |
+| Memoria larga | Resumen incremental de los mensajes antiguos, en lugar de recortarlos | [test_production.py](tests/test_production.py) |
+
+Con Docker: `docker compose --profile postgres up --build`, con `POSTGRES_PASSWORD` y `DATABASE_URL` en el `.env` (ver [.env.example](.env.example)).
 
 ## Observabilidad
 
@@ -729,8 +744,9 @@ La evaluación de respuestas se ejecutó tres veces el 13/11. Las dos primeras e
 
 ## Limitaciones y siguientes pasos
 
-- **Estado en SQLite.** La memoria y los tickets viven en un archivo SQLite, suficiente para una instancia. Con varias réplicas se usaría `AsyncPostgresSaver` y una tabla de tickets en Postgres ([DEC-019](specs/decisiones.md#dec-019)).
-- **Identidad.** Los JWT de desarrollo se firman con HS256 y un secreto compartido; en producción los emitiría un proveedor OIDC (RS256 con JWKS). No hay límite de peticiones por usuario: queda fuera de esta entrega ([DEC-018](specs/decisiones.md#dec-018)).
+- **Réplicas probadas con dos instancias en un proceso.** El test de la CI abre dos estados independientes (pools, checkpointers y almacenes propios) sobre el mismo Postgres. No se despliegan réplicas detrás de un balanceador: con el estado compartido basta con añadirlas.
+- **Límite de uso de ventana fija.** Es simple y global entre réplicas, pero en el cambio de minuto admite una ráfaga de hasta el doble del límite. Una ventana deslizante, o un token bucket en Redis, lo suavizaría.
+- **Identidad.** El modo OIDC se probó con un JWKS simulado; falta conectarlo con el proveedor real de Getnet y fijar sus claims de rol.
 - **Herramientas de soporte simuladas.** Devuelven datos ficticios. En producción llamarían a los sistemas reales con el `user_id` impuesto.
 - **RAG:** pocas consultas en portugués, sin reranker y un snapshot que hay que refrescar (ver [Limitaciones y mejoras del RAG](#limitaciones-y-mejoras-del-rag)).
 - **Subtareas en secuencia.** El supervisor ejecuta las subtareas una tras otra, porque cada una puede depender de lo que encontró la anterior. Las que son independientes se podrían lanzar en paralelo (`Send` de LangGraph) para reducir la latencia.

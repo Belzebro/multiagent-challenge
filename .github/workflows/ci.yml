@@ -17,6 +17,17 @@ jobs:
     name: Lint y tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:  # tests/test_postgres.py: dos instancias que comparten el estado
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: getnet
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d getnet" --health-interval 5s --health-timeout 5s
+          --health-retries 12
     steps:
       - uses: actions/checkout@v7
 
@@ -44,6 +55,8 @@ jobs:
         run: ruff check .
 
       - name: Tests
+        env:
+          TEST_POSTGRES_URL: postgresql://postgres:ci-only-password@localhost:5432/getnet
         run: pytest
 
       - uses: actions/cache@v6

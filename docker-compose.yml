@@ -12,9 +12,26 @@ services:
       # Observabilidad (opcional): con el perfil `observability`, OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
       METRICS_TOKEN: "${METRICS_TOKEN:-}"
+      # Producción (opcional): estado compartido entre réplicas, OIDC y límite de uso
+      DATABASE_URL: "${DATABASE_URL:-}"
+      JWT_JWKS_URL: "${JWT_JWKS_URL:-}"
+      RATE_LIMIT_PER_MINUTE: "${RATE_LIMIT_PER_MINUTE:-20}"
     volumes:
       - state:/app/data/state  # memoria (checkpoints) y tickets de HITL sobreviven a los reinicios
     restart: unless-stopped
+
+  # --- Perfil `postgres`: estado compartido entre réplicas -------------------------------------------
+  # docker compose --profile postgres up, con POSTGRES_PASSWORD y
+  # DATABASE_URL=postgresql://getnet:<contraseña>@postgres:5432/getnet en el .env
+  postgres:
+    image: postgres:16-alpine
+    profiles: [postgres]
+    environment:
+      POSTGRES_USER: getnet
+      POSTGRES_DB: getnet
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-}"  # sin contraseña, la imagen no arranca
+    volumes:
+      - pgdata:/var/lib/postgresql/data
 
   # --- Perfil `observability`: docker compose --profile observability up -------------------------------
   jaeger:  # trazas: http://localhost:16686
@@ -47,3 +64,4 @@ services:
 
 volumes:
   state:
+  pgdata:
