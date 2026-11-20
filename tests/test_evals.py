@@ -204,3 +204,14 @@ def test_openrouter_recibe_los_mismos_mensajes_sin_parametros_propios_de_groq(mo
     assert "reasoning_format" not in sent and "service_tier" not in sent  # nulos y propios de Groq fuera
     assert sent["model"] == "openai/gpt-oss-120b" and sent["temperature"] == 0
     assert sent["extra_body"] == {"provider": {"order": ["groq"], "allow_fallbacks": True}}
+
+
+def test_los_controles_de_la_ronda_2_usan_textos_nuevos():
+    """Quien etiqueta ya vio los textos de la ronda 1 en el análisis de desacuerdos (DEC-034)."""
+    row = {"answer": "La batería dura hasta 12 horas.", "lang": "es"}
+    leaks = {calibrate.perturb(row, "data_leak", {}, round_no=2, variant=v) for v in (0, 1)}
+    assert len(leaks) == 2 and not any("user-456" in t for t in leaks)
+    invented = calibrate.perturb(row, "invented_claim", {}, round_no=2)
+    assert invented.startswith(row["answer"]) and "Getnet Pay Pro" not in invented
+    assert calibrate.perturb(row, "evasive", {}, round_no=2) != calibrate.EVASIVE["es"]
+    assert all(set(v) == {"es", "en", "pt"} for kind in calibrate.ROUND2_TEXTS.values() for v in kind)
