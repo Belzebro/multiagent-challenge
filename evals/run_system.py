@@ -364,6 +364,34 @@ async def run_all(cases: list[dict], runs: int, concurrency: int, pace: float, u
     return rows, judge
 
 
+def rebuild(report: dict, rows: list[dict]) -> dict:
+    """Recalcula resúmenes, casos inestables y comparación de un informe a partir de sus filas."""
+    runs = report["meta"]["runs"]
+    groups, flat = summarize(rows, runs)
+    report.update(summary=flat, groups=groups, unstable=unstable_cases(rows), cases=rows)
+    baseline = REPORTS / "system_baseline.json"
+    if report["meta"]["name"] != "system_baseline" and baseline.exists():
+        report["baseline"] = json.loads(baseline.read_text())["groups"].get("mixed")
+    return report
+
+
+def judge_existing(name: str) -> None:
+    """Juzga las filas de un informe ya generado que no tienen veredicto válido, y lo reescribe."""
+    path = REPORTS / f"{name}.json"
+    report = json.loads(path.read_text())
+    rows = report["cases"]
+    pending = [r for r in rows if r["status"] == "completed" and r["answer"]
+               and (not r.get("judge") or "error" in r["judge"])]
+    judge = Judge()
+    asyncio.run(judge_rows(judge, pending))
+    previous = report.get("judge_usage") or {"calls": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0}
+    report["judge_usage"] = {k: previous.get(k, 0) + judge.usage.get(k, 0) for k in judge.usage}
+    report["judge_usage"]["cost_usd"] = round(previous.get("cost_usd", 0) + judge.cost_usd(), 4)
+    report["meta"]["judge"] = rubric_metadata()
+    write_report(name, rebuild(report, rows), markdown(report))
+    print(f"Juzgadas {len(pending)} respuestas; coste acumulado {report['judge_usage']['cost_usd']} USD")
+
+
 def main_cli() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--suite", choices=[*SUITES, "all"], default="all")
@@ -377,7 +405,13 @@ def main_cli() -> None:
     parser.add_argument("--baseline", type=Path, default=REPORTS / "system_baseline.json")
     parser.add_argument("--provider", choices=["groq", "openrouter"], default="groq",
                         help="Transporte del LLM: Groq u OpenRouter con el mismo modelo (providers.py).")
+    parser.add_argument("--ids", default="", help="Solo estos casos, separados por comas (pruebas rápidas).")
+    parser.add_argument("--judge-existing", action="store_true",
+                        help="Solo juzga las respuestas sin veredicto del informe --name y lo reescribe.")
     args = parser.parse_args()
+    if args.judge_existing:
+        judge_existing(args.name)
+        return
 
     provider = use_provider(args.provider)
     main.ORCHESTRATION = args.orchestration == "on"
@@ -386,6 +420,8 @@ def main_cli() -> None:
         print("Sin ANTHROPIC_API_KEY: se evalúa sin juez (solo comprobaciones deterministas).")
     suites = list(SUITES) if args.suite == "all" else [args.suite]
     cases = load_cases(suites)
+    if args.ids:
+        cases = [c for c in cases if c["id"] in set(args.ids.split(","))]
     partial = REPORTS / f"{args.name}_partial.json"
     rows, judge = asyncio.run(run_all(cases, args.runs, args.concurrency, args.pace, use_judge, partial))
     groups, flat = summarize(rows, args.runs)
@@ -397,9 +433,7 @@ def main_cli() -> None:
         "summary": flat, "groups": groups, "unstable": unstable_cases(rows),
         "judge_usage": {**judge.usage, "cost_usd": judge.cost_usd()} if judge else None, "cases": rows,
     }
-    if args.name != "system_baseline" and args.baseline.exists():
-        report["baseline"] = json.loads(args.baseline.read_text())["groups"].get("mixed")
-    write_report(args.name, report, markdown(report))
+    write_report(args.name, rebuild(report, rows), markdown(report))
     partial.unlink(missing_ok=True)
     print(json.dumps(flat, ensure_ascii=False))
 

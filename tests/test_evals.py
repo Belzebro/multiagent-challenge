@@ -9,6 +9,8 @@ import pytest
 from evals import calibrate, run_system
 from evals.judge import DIMENSIONS, Dimension, Judge, JudgeVerdict, passes, render_item
 
+QUESTION_ES = "¿Qué soluciones de pago online ofrece Getnet?"
+
 
 class FakeAnthropic:
     """Imita `AsyncAnthropic().messages.parse`: devuelve un veredicto fijo y guarda las peticiones."""
@@ -129,6 +131,26 @@ def test_run_system_de_extremo_a_extremo(fake_groq, offline_kb, monkeypatch):
                  "runs": 2, "judge": None},
         "summary": flat, "groups": groups, "unstable": run_system.unstable_cases(rows),
         "judge_usage": None, "cases": rows})
+
+
+def test_judge_existing_juzga_solo_lo_que_falta_y_reescribe_el_informe(fake_groq, offline_kb, monkeypatch,
+                                                                      tmp_path):
+    monkeypatch.setattr(run_system, "REPORTS", tmp_path)
+    monkeypatch.setattr(run_system, "Judge", lambda: Judge(client=FakeAnthropic()))
+    monkeypatch.setattr(run_system, "write_report",
+                        lambda name, report, md: (tmp_path / f"{name}.json").write_text(json.dumps(report)))
+    case = {"id": "A01", "suite": "golden", "type": "answerable", "lang": "es", "question": QUESTION_ES,
+            "source": "https://www.getnet.net/en/our-solutions/online-payments", "facts_any": ["online"]}
+    rows, _ = asyncio.run(run_system.run_all([case], runs=1, concurrency=1, pace=0, use_judge=False))
+    meta = {"name": "system", "runs": 1, "generated_at": "t", "git_commit": "c", "model": "m",
+            "orchestration": "on", "judge": None}
+    report = {"meta": meta, "cases": rows, "judge_usage": None}
+    (tmp_path / "system.json").write_text(json.dumps(report))
+    run_system.judge_existing("system")
+    saved = json.loads((tmp_path / "system.json").read_text())
+    assert saved["summary"]["judge_all"] == 1.0 and saved["judge_usage"]["calls"] == 1
+    run_system.judge_existing("system")  # nada pendiente: no vuelve a llamar
+    assert json.loads((tmp_path / "system.json").read_text())["judge_usage"]["calls"] == 1
 
 
 def test_un_caso_que_cambia_entre_pasadas_es_inestable():
