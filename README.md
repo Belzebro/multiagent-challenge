@@ -190,7 +190,7 @@ Incluye la cabecera `X-Request-ID`, el mismo identificador que aparece en los lo
 | Campo | Descripción |
 |---|---|
 | `user_id` | La identidad del token. |
-| `agent` | Nodo que atendió la consulta: `knowledge`, `support` o `guardrail`. Es el valor final de `next_node`. |
+| `agent` | Ruta del router: `knowledge`, `support` o `guardrail` (el especialista del primer paso del plan). |
 | `response` | Respuesta final del agente. |
 | `tools_used` | Herramientas ejecutadas en este turno, en orden. |
 | `conversation_id` | Conversación a la que pertenece el turno; se envía en el siguiente mensaje para continuarla. |
@@ -198,6 +198,9 @@ Incluye la cabecera `X-Request-ID`, el mismo identificador que aparece en los lo
 | `ticket_id` | Ticket del operador cuando `status` es `pending_human`; si no, `null`. |
 | `sources` | URLs de las páginas que recuperó el RAG en este turno (procedencia de la respuesta). |
 | `usage` | Tokens de entrada y salida de todas las llamadas al LLM del turno, coste estimado en USD y latencia en ms. |
+| `agents` | Especialistas que intervinieron en el turno, en orden (por ejemplo `["support", "knowledge"]`). |
+| `plan` | Subtareas del turno, cada una con `agent`, `goal`, `status` (`done` o `skipped`) y `origin` (`router` o `supervisor`). |
+| `critic` | Veredicto del crítico cuando hubo síntesis: `approved`, `approved_after_revision`, `delivered_with_issues` o `unreviewed`; `null` en la vía rápida. |
 
 **Errores:**
 
@@ -324,116 +327,109 @@ Los cambios de estado del ticket son atómicos: un ticket no se resuelve dos vec
 
 ```mermaid
 flowchart LR
-    S([START]) --> R["router<br/>Router Agent + Guardrails"]
+    S([START]) --> R["router<br/>guardrails + plan"]
     R -- "next_node = guardrail" --> G["guardrail<br/>respuesta fija"]
     R -- "next_node = knowledge" --> K["knowledge<br/>Knowledge Agent"]
     R -- "next_node = support" --> SU["support<br/>Support Agent"]
-    K -- "tool_calls" --> KT["knowledge_tools<br/>search_getnet_knowledge"]
-    KT --> K
-    SU -- "tool_calls" --> ST["support_tools<br/>check_transaction_status<br/>check_terminal_connection"]
-    ST --> SU
-    G --> E([END])
-    K -- "sin tool_calls" --> E
-    SU -- "sin tool_calls" --> E
+    K <--> KT["knowledge_tools<br/>search_getnet_knowledge"]
+    SU <--> ST["support_tools<br/>diagnóstico + HITL"]
+    K -- "responde" --> SV["supervisor<br/>observa y replanifica"]
+    SU -- "responde" --> SV
+    SV -- "next_node = knowledge / support" --> K
+    SV -- "next_node = knowledge / support" --> SU
+    SV -- "synthesize" --> SY["synthesizer"]
+    SY --> C["critic"]
+    C -- "revisar (una vez)" --> SY
+    SV -- "escalate" --> H["escalation<br/>interrupt()"]
+    SV -- "finish: una sola intención" --> E([END])
+    C -- "aprobado" --> E
+    G --> E
+    H --> E
 ```
+
+Cada turno sigue el patrón **planificar → delegar entre especialistas → observar → replanificar → sintetizar → criticar → parar**, con una persona cuando hace falta. Cada paso tiene su test en [tests/test_orchestration.py](tests/test_orchestration.py):
+
+| Paso | Cómo se implementa | Test |
+|---|---|---|
+| Planificar | El router devuelve `next_node` y un `plan` de subtareas por especialista | `test_consulta_mixta_support_y_luego_knowledge` |
+| Delegar en los dos sentidos | El supervisor fija `next_node` y vuelve a usar `add_conditional_edges`: Support → Knowledge y Knowledge → Support | `test_consulta_mixta_*` |
+| Observar | Al terminar, cada especialista pasa al supervisor, que guarda su respuesta y sus fuentes como hallazgo | `test_consulta_mixta_support_y_luego_knowledge` |
+| Replanificar | El supervisor cambia la subtarea siguiente o añade otra según lo encontrado (`origin: "supervisor"`) | `test_el_supervisor_cambia_la_subtarea_*`, `test_el_supervisor_anade_*` |
+| Sintetizar | El sintetizador integra los hallazgos en una sola respuesta, con sus fuentes | `test_consulta_mixta_*` |
+| Criticar | El crítico aprueba la síntesis o pide una revisión; como máximo una | `test_el_critico_*`, `test_si_el_critico_rechaza_*` |
+| Parar | Termina al cumplirse el plan, cuando no hay progreso o al llegar a 4 especialistas (`MAX_HOPS`) | `test_tope_de_especialistas_*`, `test_sin_progreso_*` |
+| Humano o agente | El supervisor puede escalar (`interrupt()`), y un HITL a mitad de plan continúa con la subtarea siguiente | `test_el_supervisor_escala_*`, `test_hitl_a_mitad_de_plan_*` |
+| Vía rápida | Si hay una sola intención y se resuelve con normalidad, el supervisor termina sin llamar al LLM: no hay síntesis ni crítica | `test_una_sola_intencion_usa_la_via_rapida` |
 
 ### Estado compartido
 
-```python
-class State(TypedDict):
-    messages: Annotated[list[AnyMessage], add_messages]
-    user_id: str
-    next_node: str
-```
-
-Cada nodo recibe el estado completo y devuelve solo las claves que quiere actualizar. LangGraph las fusiona según el reducer de cada campo:
-
 | Campo | Quién lo escribe | Cómo se actualiza |
 |---|---|---|
-| `messages` | La API (mensaje inicial), los agentes (`AIMessage`), los nodos de herramientas (`ToolMessage`) y el guardrail | Reducer `add_messages`: añade al historial (y fusiona por `id`). Cada nodo devuelve solo sus mensajes nuevos. |
-| `user_id` | La API, con el `sub` del token verificado | Sin reducer. No cambia durante la ejecución. El `ToolNode` lo inyecta en las herramientas de soporte. |
-| `next_node` | El router | Sin reducer: el último valor escrito reemplaza al anterior. |
+| `messages` | La API (mensaje del usuario), los agentes, los nodos de herramientas, el sintetizador, el guardrail y el escalado | Reducer `add_messages`: añade al historial (y fusiona por `id`) |
+| `user_id` | La API, con el `sub` del token verificado | No cambia durante la ejecución. El `ToolNode` lo inyecta en las herramientas de soporte |
+| `next_node` | El router, el supervisor y el crítico | Último valor escrito. Las aristas condicionales lo leen para elegir el siguiente nodo |
+| `route` | El router | Ruta del primer paso. La API la devuelve como `agent` |
+| `plan`, `findings`, `hops`, `step_start` | El router los reinicia en cada turno; el supervisor los actualiza | Último valor escrito, así que no se mezclan entre turnos |
+| `review`, `critic` | El crítico | Correcciones pedidas y veredicto final |
 
-### El Router Agent como punto de entrada
+### El Router Agent como punto de entrada y planificador
 
 La única arista que sale de `START` es `START → router`, así que todo mensaje pasa por el router antes de llegar a un agente con herramientas.
 
-1. **Entrada.** El router evalúa solo el último mensaje (`state["messages"][-1]`). Su system prompt define las tres rutas y trata el mensaje como un dato a clasificar, no como instrucciones.
-2. **Clasificación estructurada.** En lugar de pedir texto libre y parsearlo, el LLM se envuelve con `with_structured_output(RouteDecision, method="function_calling", include_raw=True)`. Groq recibe una única herramienta, `RouteDecision`, y un `tool_choice` que obliga a llamarla. Este es un extracto de la petición real capturada en las pruebas:
-
-   ```json
-   "tools": [{"type": "function", "function": {"name": "RouteDecision", "parameters": {
-     "properties": {
-       "next_node": {"enum": ["guardrail", "knowledge", "support"], "type": "string"},
-       "reason": {"type": "string"}},
-     "required": ["next_node", "reason"]}}}],
-   "tool_choice": {"type": "function", "function": {"name": "RouteDecision"}}
-   ```
-
-   Pydantic valida la respuesta. Como `next_node` es un `Literal`, solo puede tomar uno de esos tres valores. El campo `reason` se registra en los logs para poder auditar cada decisión.
-3. **Salida.** El router devuelve únicamente `{"next_node": "<ruta>"}`. No añade mensajes, así que los agentes posteriores no lo ven.
-4. **Fail-closed.** Con `include_raw=True`, un fallo de parseo no lanza una excepción: deja `parsed=None`, y en ese caso el router envía el mensaje a `guardrail`. Los errores de red o de la API de Groq sí se propagan y terminan en un `500`. Así, una caída del proveedor nunca se presenta como un rechazo.
+1. **Entrada.** El router evalúa el último mensaje y, como contexto, la respuesta anterior del asistente. Su system prompt define las tres rutas y trata el mensaje como un dato a clasificar, no como instrucciones.
+2. **Clasificación estructurada.** El LLM se envuelve con `with_structured_output(RouteDecision, method="function_calling", include_raw=True)`. Groq recibe una única herramienta, `RouteDecision`, y un `tool_choice` que obliga a llamarla. `next_node` es un enum cerrado (`guardrail`, `knowledge` o `support`) y `plan` es una lista opcional de subtareas `{agent, goal}`.
+3. **Plan.** Si el mensaje necesita a los dos especialistas, por ejemplo «mi terminal está offline y ¿cómo configuro el Wi-Fi?», el plan trae una subtarea por especialista. Si basta uno, el plan es el propio mensaje.
+4. **Fail-closed.** Si la respuesta no es válida, el mensaje va a `guardrail`. Los errores de red o de Groq se propagan y terminan en un `500`: una caída del proveedor nunca se presenta como un rechazo.
 
 ### Cómo LangGraph gestiona `next_node`
 
 ```python
 builder.add_conditional_edges(
-    "router",
-    lambda state: state["next_node"],  # función de enrutamiento
-    {"guardrail": "guardrail", "knowledge": "knowledge", "support": "support"},  # path_map
+    "router", lambda state: state["next_node"],
+    {"guardrail": "guardrail", "knowledge": "knowledge", "support": "support"},
+)
+builder.add_conditional_edges(
+    "supervisor", lambda state: state["next_node"],
+    {"knowledge": "knowledge", "support": "support", "synthesize": "synthesizer",
+     "escalate": "escalation", "finish": END},
 )
 ```
 
-LangGraph ejecuta el grafo por *supersteps* (modelo Pregel). Al terminar el superstep del router:
+LangGraph ejecuta el grafo por *supersteps* (modelo Pregel). Al terminar el superstep del router (o del supervisor), aplica la actualización de `next_node`, evalúa la función de la arista con el estado ya actualizado y traduce el valor con el `path_map` al nodo que se ejecuta a continuación. El `path_map` declara de antemano los destinos posibles: si la función devolviera otro valor, LangGraph lanzaría un `KeyError` en lugar de saltar a un nodo no previsto.
 
-1. Aplica la actualización `{"next_node": "support"}` al campo `next_node` del estado.
-2. Evalúa la función de la arista condicional con el estado ya actualizado, que devuelve `"support"`.
-3. Traduce ese valor con el `path_map` al nodo `support`, que se ejecuta en el siguiente superstep.
+### Especialistas y bucles ReAct
 
-El `path_map` declara de antemano los destinos posibles. Esto permite compilar y dibujar el grafo. Además, si la función devolviera un valor que no está en el mapa, LangGraph lanzaría un `KeyError` en lugar de saltar a un nodo no previsto.
+- Knowledge y Support siguen el patrón ReAct con `bind_tools`: piden una herramienta, la ejecuta el `ToolNode` y el resultado vuelve al agente. El `ToolNode` inyecta los argumentos marcados con `InjectedState`, como el `user_id` del token (ver [Bonus Challenges](#2-mitigación-de-prompt-injection-en-la-identidad-user_id-en-las-tools)).
+- En los turnos con varias subtareas, cada especialista recibe la subtarea asignada y lo que ya encontraron los demás.
+- **El bucle está acotado:** tras 3 herramientas en la misma subtarea (`MAX_TOOL_CALLS_PER_TURN`), la respuesta final se pide al LLM sin herramientas, con la pregunta y lo encontrado como texto. La evaluación de respuestas descubrió dos fallos que esto corrige ([DEC-023](specs/decisiones.md#dec-023)):
+  - un bucle de búsquedas que acababa en `500`;
+  - un 400 de Groq con `tool_choice="none"`.
+- Si un especialista agota sus herramientas, o el RAG no recupera nada, el supervisor revisa el resultado aunque la consulta sea de una sola intención.
+- Como última protección, cada petición tiene `recursion_limit=40` supersteps (`MAX_GRAPH_STEPS`). Los límites reales son las 3 herramientas por subtarea y los 4 especialistas por turno.
 
-`next_node` permanece en el estado final, y la API lo devuelve como `agent` para saber qué agente respondió.
+### Ciclo de vida de una consulta mixta
 
-### Bucles agente ⇄ herramientas (ReAct)
+Recorrido para «Mi Smart está offline y ¿cómo configuro el Wi-Fi?». Es ilustrativo: el orden de las herramientas lo decide el LLM.
 
-Knowledge y Support siguen el patrón ReAct. El LLM, con las herramientas vinculadas mediante `bind_tools`, decide si necesita una herramienta. Si la pide, la ejecuta el nodo de herramientas y el resultado vuelve al agente:
-
-```python
-builder.add_conditional_edges("support", tools_condition, {"tools": "support_tools", END: END})
-builder.add_edge("support_tools", "support")
-```
-
-- `tools_condition` (de `langgraph.prebuilt`) devuelve `"tools"` si el último `AIMessage` contiene `tool_calls`, y `END` si no.
-- El nodo de herramientas (`ToolNode` de LangGraph) ejecuta cada llamada, inyecta los argumentos marcados con `InjectedState` (el `user_id` del token) y devuelve un `ToolMessage` con su `tool_call_id`, que permite al LLM asociar cada resultado con su petición (ver [Bonus Challenges](#2-mitigación-de-prompt-injection-en-la-identidad-user_id-en-las-tools)).
-- El bucle termina cuando el agente responde sin pedir más herramientas. **Está acotado:** tras 3 herramientas en el mismo turno (`MAX_TOOL_CALLS_PER_TURN`), la respuesta final se pide al LLM sin herramientas, con la pregunta y lo que devolvieron las herramientas como texto. La evaluación de respuestas encontró los dos fallos que corrige esto:
-  - un agente que no encontraba un dato buscaba hasta agotar el `recursion_limit`, y la API devolvía un `500`;
-  - con `tool_choice="none"`, Groq devuelve 400 si el modelo intenta igualmente llamar a una herramienta.
-
-  Detalle en [DEC-023](specs/decisiones.md#dec-023).
-- Como última protección, cada petición se ejecuta con `recursion_limit=12` supersteps (`MAX_GRAPH_STEPS`).
-
-### Ciclo de vida de una petición
-
-Recorrido para el mensaje `"Mi terminal no conecta y me rechazaron un cobro"`. Es ilustrativo, porque el orden de las herramientas lo decide el LLM:
-
-| Paso | Nodo | Escribe en el estado |
+| Paso | Nodo | Qué hace |
 |---|---|---|
-| Entrada | API | `messages=[HumanMessage]`, `user_id="user-123"`, `next_node=""` |
-| 1 | `router` | `next_node="support"` |
-| 2 | `support` | `AIMessage(tool_calls=[check_terminal_connection])` |
-| 3 | `support_tools` | `ToolMessage("[Monitor de terminales] ... OFFLINE ...")` |
-| 4 | `support` | `AIMessage(tool_calls=[check_transaction_status])` |
-| 5 | `support_tools` | `ToolMessage("[Sistema de pagos] ... RECHAZADA ...")` |
-| 6 | `support` | `AIMessage("Tu terminal está offline...")`; `tools_condition` lleva a `END` |
+| 1 | `router` | `next_node="support"`, con el plan `[support: diagnosticar el terminal, knowledge: guía de Wi-Fi]` |
+| 2–6 | `support` ⇄ `support_tools` | Diagnostica: terminal OFFLINE, error E-102 y señal Wi-Fi débil |
+| 7 | `supervisor` | Guarda el hallazgo y delega en Knowledge; puede ajustar la subtarea, por ejemplo con el error E-102 |
+| 8–10 | `knowledge` ⇄ `knowledge_tools` | Busca la guía oficial, con el hallazgo de Support como contexto |
+| 11 | `supervisor` | Plan cumplido: pasa a sintetizar |
+| 12 | `synthesizer` | Una sola respuesta con el diagnóstico, los pasos y las fuentes |
+| 13 | `critic` | Comprueba que todo está respaldado por los hallazgos; aprueba o pide una revisión |
 
-Según la documentación de Groq, `openai/gpt-oss-120b` no admite llamadas a herramientas en paralelo, así que pide una por turno. El bucle lo resuelve igualmente, con una vuelta más.
+La respuesta de `/chat` incluye `agents` (los especialistas que intervinieron, en orden), `plan` (cada subtarea con su estado y su origen) y `critic` (el veredicto).
 
 ### Decisiones de diseño
 
-- **Grafo compilado una vez, al arrancar,** con un checkpointer de SQLite: cada `conversation_id` es un `thread_id` de LangGraph. El proceso de la API no guarda estado propio; con varias réplicas bastaría con mover el checkpointer y los tickets a Postgres ([DEC-019](specs/decisiones.md#dec-019)).
-- **Asíncrona de extremo a extremo:** el endpoint, `graph.ainvoke` y los nodos son `async`. Las herramientas síncronas (FAISS y embeddings) se ejecutan en un pool de hilos a través de `tool.ainvoke`, sin bloquear el event loop.
-- **Una sola instancia de LLM:** un único `ChatGroq` (`temperature=0`, `timeout=30`, `max_retries=2`), reutilizado con `with_structured_output` en el router y con `bind_tools` en cada agente.
-- **Un worker de uvicorn por contenedor.** Cada worker cargaría su propio modelo y su propio índice. Para escalar se añaden réplicas.
+- **Complejidad proporcional al valor.** La colaboración solo se activa cuando el plan lo necesita. Una consulta de una sola intención hace las mismas llamadas al LLM que en la versión anterior: router y especialista.
+- **Grafo compilado una vez, al arrancar,** con un checkpointer de SQLite: cada `conversation_id` es un `thread_id` de LangGraph. El plan y los hallazgos viven en el checkpoint, así que un HITL a mitad de plan se reanuda donde estaba. Con varias réplicas bastaría con mover el checkpointer y los tickets a Postgres ([DEC-019](specs/decisiones.md#dec-019)).
+- **Asíncrona de extremo a extremo:** el endpoint, `graph.ainvoke` y los nodos son `async`. Las herramientas síncronas (FAISS y embeddings) se ejecutan en un pool de hilos a través de `tool.ainvoke`.
+- **Una sola instancia de LLM:** un único `ChatGroq`, reutilizado con `with_structured_output` (router, supervisor y crítico) y con `bind_tools` (especialistas).
+- **Un worker de uvicorn por contenedor.** Cada worker cargaría su propio modelo y su propio índice; para escalar se añaden réplicas.
 
 ## Pipeline RAG
 
@@ -693,6 +689,6 @@ La evaluación de respuestas se ejecutó tres veces el 13/11. Las dos primeras e
 - **Identidad.** Los JWT de desarrollo se firman con HS256 y un secreto compartido; en producción los emitiría un proveedor OIDC (RS256 con JWKS). No hay límite de peticiones por usuario: queda fuera de esta entrega ([DEC-018](specs/decisiones.md#dec-018)).
 - **Herramientas de soporte simuladas.** Devuelven datos ficticios. En producción llamarían a los sistemas reales con el `user_id` impuesto.
 - **RAG:** consultas en español, umbral de similitud y búsqueda híbrida (ver [Limitaciones y mejoras del RAG](#limitaciones-y-mejoras-del-rag)).
-- **Colaboración entre especialistas.** El router elige un especialista por turno. Un supervisor que encadene Support y Knowledge (por ejemplo, diagnóstico más guía oficial) es el siguiente paso de orquestación ([DEC-018](specs/decisiones.md#dec-018)).
+- **Subtareas en secuencia.** El supervisor ejecuta las subtareas una tras otra, porque cada una puede depender de lo que encontró la anterior. Las que son independientes se podrían lanzar en paralelo (`Send` de LangGraph) para reducir la latencia.
 - **Versiones fijadas.** `requirements.lock` fija las 104 dependencias para Linux x86_64 y Python 3.11, y Docker y la CI instalan desde él. Se regenera con `scripts/lock_requirements.sh` después de cambiar `requirements.txt`.
 - **`langchain-community` en retirada.** El paquete muestra un aviso de deprecación. Se mantiene porque el enunciado pide `WebBaseLoader`, que vive ahí junto con la integración de FAISS; a medio plazo conviene migrar siguiendo la guía oficial de LangChain.

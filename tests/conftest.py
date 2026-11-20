@@ -8,6 +8,7 @@ no necesita red ni una GROQ_API_KEY real.
 
 import json
 import os
+import re
 import time
 
 os.environ.setdefault("GROQ_API_KEY", "test-key-never-sent")
@@ -53,9 +54,20 @@ def completion(content=None, tool_calls=None):
 class FakeGroq:
     """Imita ``AsyncGroq().chat.completions``: responde según la petición y guarda lo que recibe.
 
-    Sabe qué agente llama por las tools que ofrece la petición, y en qué vuelta del bucle ReAct está por
-    los mensajes de tool posteriores al último mensaje del usuario (el turno actual).
+    Sabe qué nodo llama por las tools que ofrece la petición (o por su system prompt), y en qué vuelta
+    del bucle ReAct está por los resultados de sus propias tools desde el último mensaje del usuario.
+    Los escenarios de orquestación se eligen con una palabra clave en el mensaje (ver PLANS).
     """
+
+    # Palabra clave del mensaje -> plan que devuelve el router (la primera que aparezca gana).
+    PLANS = [
+        ("saltos", [("knowledge", "búsqueda 0"), ("support", "Revisión final")]),
+        ("repite", [("knowledge", "Buscar A"), ("support", "Buscar B")]),
+        ("inverso", [("knowledge", "Condiciones oficiales de los reembolsos"),
+                     ("support", "Estado de mis transacciones")]),
+        ("caso", [("support", "Diagnosticar el terminal"),
+                  ("knowledge", "Guía oficial para configurar el Wi-Fi")]),
+    ]
 
     def __init__(self):
         self.requests: list[dict] = []
@@ -64,21 +76,41 @@ class FakeGroq:
         self.requests.append(kwargs)
         msgs = kwargs["messages"]
         tools = [t["function"]["name"] for t in kwargs.get("tools") or []]
+        system = "\n".join(m.get("content") or "" for m in msgs if m["role"] == "system")
         last_user = max(i for i, m in enumerate(msgs) if m["role"] == "user")
         user, low = msgs[last_user]["content"], msgs[last_user]["content"].lower()
-        turn_tools = [m for m in msgs[last_user + 1:] if m["role"] == "tool"]
+        # Nombre de cada tool call, para contar solo los resultados de las tools de quien llama ahora.
+        call_names = {tc["id"]: tc["function"]["name"]
+                      for m in msgs if m["role"] == "assistant" for tc in m.get("tool_calls") or []}
+        turn_tools = [m for m in msgs[last_user + 1:]
+                      if m["role"] == "tool" and call_names.get(m.get("tool_call_id")) in tools]
 
         if "UPSTREAM_DOWN" in user:
             raise RuntimeError("simulated Groq outage")
-        if "RouteDecision" in tools:  # router
+        if "RouteDecision" in tools:  # router (y planificador)
             if "PARSE_FAIL" in user:
                 return completion(content="no estoy seguro")  # sin tool call -> parsed=None
+            for keyword, plan in self.PLANS:
+                if keyword in low:
+                    args = {"next_node": plan[0][0], "reason": "test",
+                            "plan": [{"agent": a, "goal": g} for a, g in plan]}
+                    return completion(tool_calls=[("RouteDecision", args)])
             route = ("guardrail" if ("idiota" in low or "ignora tus instrucciones" in low)
                      else "support" if any(w in low for w in ("terminal", "reembolso", "persona"))
                      else "knowledge")
             return completion(tool_calls=[("RouteDecision", {"next_node": route, "reason": "test"})])
-        if not tools and any(main.FINAL_ANSWER_NOTE in (m.get("content") or "") for m in msgs):
+        if "SupervisorDecision" in tools:
+            return self.supervisor(low, system)
+        if "CriticVerdict" in tools:
+            revise = "rechazo" in low or ("critica" in low and "SINTESIS_REVISADA" not in system)
+            verdict = {"verdict": "revise", "issues": "falta citar la fuente"} if revise else {}
+            return completion(tool_calls=[("CriticVerdict", verdict or {"verdict": "approve"})])
+        if not tools and main.FINAL_ANSWER_NOTE in system:
             return completion(content="RESPUESTA_FINAL_SIN_HERRAMIENTAS")  # tope de herramientas del turno
+        if not tools and main.SYNTHESIZER_PROMPT in system:
+            label = "SINTESIS_REVISADA" if "El revisor pidió corregir" in system else "SINTESIS"
+            agents = re.findall(r"^- (knowledge|support) ·", system, re.MULTILINE)
+            return completion(content=f"{label}<<{'+'.join(agents)}>>")
         if "search_getnet_knowledge" in tools:  # knowledge
             if "bucle" in low:  # el LLM no deja de buscar
                 query = {"query": f"intento {len(turn_tools)}"}
@@ -103,6 +135,27 @@ class FakeGroq:
             outs = [m["content"].splitlines()[0] for m in turn_tools]
             return completion(content="SUPPORT<<" + " || ".join(outs) + ">>")
         raise AssertionError(f"petición inesperada: tools={tools}")
+
+    @staticmethod
+    def supervisor(low, system):
+        def decide(action, agent=None, goal=""):
+            args = {"action": action, "agent": agent, "goal": goal, "reason": "test"}
+            return completion(tool_calls=[("SupervisorDecision", args)])
+
+        if "bucle" in low:
+            return decide("finish")
+        if "escalar" in low:
+            return decide("escalate")
+        if "saltos" in low:  # cada vez pide una búsqueda nueva: lo corta el tope de especialistas
+            return decide("delegate", "knowledge", f"búsqueda {system.count('[hecha]')}")
+        if "repite" in low:  # pide otra vez una subtarea ya hecha: sin progreso
+            return decide("delegate", "knowledge", "Buscar A")
+        if "ampliar" in low and "Revisar transacciones" not in system:
+            return decide("delegate", "support", "Revisar transacciones rechazadas")
+        if "replan" in low and "[pendiente] knowledge" in system:
+            return decide("delegate", "knowledge", "Guía oficial para el error E-102 detectado")
+        pending = re.search(r"\[pendiente\] (knowledge|support)", system)
+        return decide("delegate", pending.group(1)) if pending else decide("synthesize")
 
 
 @pytest.fixture

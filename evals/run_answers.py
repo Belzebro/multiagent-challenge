@@ -60,7 +60,7 @@ async def run(cases: list[dict], pace: float) -> tuple[list[dict], dict]:
                     url for m in result["messages"] if isinstance(m, ToolMessage)
                     and m.name == "search_getnet_knowledge" for url in m.artifact or []))
                 checks = {
-                    "routed": result["next_node"] == "knowledge",
+                    "routed": (result.get("route") or result["next_node"]) == "knowledge",
                     "source_hit": case["source"] in sources,
                     "fact": any(normalize(f) in normalize(answer) for f in case["facts_any"]),
                     "language": language(answer) == case["lang"],

@@ -8,13 +8,15 @@ Cada tarea enlaza a sus requisitos ([especificación](especificacion.md)) y, al 
 
 ## F11: orquestación (A)
 
-- [ ] **T-110** `RouteDecision` con `plan`; el estado añade `plan`, `findings`, `hops`, `route` y `review`, y el router los reinicia en cada turno. → ORQ2-01
-- [ ] **T-111** Especialistas que trabajan sobre la subtarea asignada y terminan en el supervisor. → ORQ2-02
-- [ ] **T-112** Supervisor con salida estructurada: delegar (con replanificación), sintetizar o escalar; vía rápida determinista; máximo 4 saltos. → ORQ2-03, ORQ2-06, ORQ2-08
-- [ ] **T-113** Sintetizador y crítico con una revisión como máximo. → ORQ2-04, ORQ2-05
-- [ ] **T-114** Nodo de escalado con `interrupt()` y continuación del plan tras un ticket. → ORQ2-07, ORQ2-09
-- [ ] **T-115** Respuesta de la API con `agents` y `plan`; README con el patrón y su evidencia. → ORQ2-01 a ORQ2-09
-- [ ] **T-116** Tests: consulta mixta Support → Knowledge, Knowledge → Support, replanificación, crítica con revisión, tope de saltos, vía rápida sin llamadas extra, escalado y HITL a mitad de plan. → ORQ2-01 a ORQ2-09
+Evidencia: [tests/test_orchestration.py](../../tests/test_orchestration.py) (12 pruebas) y la sección «Arquitectura de orquestación» del [README](../../README.md).
+
+- [x] **T-110** `RouteDecision` con `plan`; el estado añade `plan`, `findings`, `hops`, `route` y `review`, y el router los reinicia en cada turno. → ORQ2-01
+- [x] **T-111** Especialistas que trabajan sobre la subtarea asignada y terminan en el supervisor. → ORQ2-02
+- [x] **T-112** Supervisor con salida estructurada: delegar (con replanificación), sintetizar o escalar; vía rápida determinista; máximo 4 saltos. → ORQ2-03, ORQ2-06, ORQ2-08
+- [x] **T-113** Sintetizador y crítico con una revisión como máximo. → ORQ2-04, ORQ2-05
+- [x] **T-114** Nodo de escalado con `interrupt()` y continuación del plan tras un ticket. → ORQ2-07, ORQ2-09
+- [x] **T-115** Respuesta de la API con `agents` y `plan`; README con el patrón y su evidencia. → ORQ2-01 a ORQ2-09
+- [x] **T-116** Tests: consulta mixta Support → Knowledge, Knowledge → Support, replanificación, crítica con revisión, tope de saltos, vía rápida sin llamadas extra, escalado y HITL a mitad de plan. → ORQ2-01 a ORQ2-09
 
 ## F12: RAG (B)
 

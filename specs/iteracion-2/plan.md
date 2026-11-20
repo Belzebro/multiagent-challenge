@@ -32,12 +32,12 @@ El router sigue fijando `next_node` y conectándose con `add_conditional_edges` 
 
 | Orden | Fase | Contenido | Prio | Cuándo |
 |---|---|---|---|---|
-| 0 | Specs | Este documento, la especificación y las tareas | A | 19/11, 15:45 |
-| 1 | Orquestación | ORQ2-01 a ORQ2-09 | A | 19/11, 16:00–18:30 |
-| 2 | RAG | RAG2-01 a RAG2-04 | B | 19/11, 18:30–20:00 |
-| 3 | Evaluación | EVAL2-01 a EVAL2-06 (necesita [Q-012](../preguntas.md#q-012) y tus etiquetas) | A | 20/11, 09:00–12:00 |
-| 4 | Observabilidad | OBS2-01 a OBS2-05 | B | 20/11, 12:00–13:30 |
-| 5 | Producción, seguridad y memoria | PROD2-01, SEC2-01, SEC2-02, MEM2-01 | C | 20/11, 13:30–15:30 |
+| 0 | Specs | Este documento, la especificación y las tareas | A | 19/11, 18:40 |
+| 1 | Orquestación | ORQ2-01 a ORQ2-09 | A | 19/11, 18:45–22:00 |
+| 2 | RAG | RAG2-01 a RAG2-04 | B | 20/11, 08:30–10:00 |
+| 3 | Evaluación | EVAL2-01 a EVAL2-06 (necesita [Q-012](../preguntas.md#q-012) y tus etiquetas) | A | 20/11, 10:00–12:30 |
+| 4 | Observabilidad | OBS2-01 a OBS2-05 | B | 20/11, 12:30–14:00 |
+| 5 | Producción, seguridad y memoria | PROD2-01, SEC2-01, SEC2-02, MEM2-01 | C | 20/11, 14:00–15:30 |
 | 6 | Cierre | README, specs, informes y tag `v6-reevaluacion` | A | 20/11, 15:30–16:30 |
 
 Reglas:
