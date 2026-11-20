@@ -130,8 +130,8 @@ async def run_case(graph, case: dict, run: int, semaphore: asyncio.Semaphore, pa
            "cost_usd": round((tokens_in * main.PRICE_INPUT_PER_MTOK
                               + tokens_out * main.PRICE_OUTPUT_PER_MTOK) / 1_000_000, 6),
            "error": error, "answer": "", "sources": [], "evidence": "", "route": None, "plan": [],
-           "agents": [], "critic": None, "tools": [], "status": "error" if error else "completed",
-           "judge": None}
+           "agents": [], "critic": None, "tools": [], "dropped_claims": [],
+           "status": "error" if error else "completed", "judge": None}
     if result is not None:
         messages = result["messages"]
         row.update(
@@ -142,7 +142,8 @@ async def run_case(graph, case: dict, run: int, semaphore: asyncio.Semaphore, pa
             evidence=main.turn_evidence({"messages": messages}),
             route=result.get("route"), plan=result.get("plan") or [],
             agents=[f["agent"] for f in result.get("findings") or []], critic=result.get("critic") or None,
-            tools=[m.name for m in messages if isinstance(m, ToolMessage)])
+            tools=[m.name for m in messages if isinstance(m, ToolMessage)],
+            dropped_claims=result.get("dropped_claims") or [])  # frases que descartó la verificación
     row["checks"] = checks(case, row)
     marks = " ".join(f"{k}={int(v)}" for k, v in row["checks"].items() if v is not None)
     print(f"[run {run}] {case['id']} {row['status']} {latency}s {marks}")

@@ -83,6 +83,10 @@ class FakeGroq:
                      ("support", "Estado de mis transacciones")]),
         ("caso", [("support", "Diagnosticar el terminal"),
                   ("knowledge", "Guía oficial para configurar el Wi-Fi")]),
+        ("verifica", [("support", "Diagnosticar el terminal"),
+                      ("knowledge", "Guía oficial para configurar el Wi-Fi")]),
+        ("sinestructura", [("support", "Diagnosticar el terminal"),
+                           ("knowledge", "Guía oficial para configurar el Wi-Fi")]),
     ]
 
     def __init__(self):
@@ -128,12 +132,25 @@ class FakeGroq:
             return completion(content=f"RESUMEN<<{user.count('Cliente:')} mensajes del cliente>>")
         if not tools and main.FINAL_ANSWER_NOTE in system:
             return completion(content="RESPUESTA_FINAL_SIN_HERRAMIENTAS")  # tope de herramientas del turno
-        if not tools and main.SYNTHESIZER_PROMPT in system:
+        if "Synthesis" in tools:  # síntesis frase a frase, cada dato con su cita de las pruebas
+            if "sinestructura" in low:
+                return completion(content="texto sin la estructura pedida")  # sin tool call -> parsed=None
             revised = "El revisor pidió corregir" in system
             agents = re.findall(r"^- (knowledge|support) ·", system, re.MULTILINE)
             invented = " según la guía [1]" if "citafalsa" in low and not revised else ""  # cita sin fuente
             label = "SINTESIS_REVISADA" if revised else "SINTESIS"
-            return completion(content=f"{label}<<{'+'.join(agents)}>>{invented}")
+            claims = [{"kind": "enlace", "text": f"{label}<<{'+'.join(agents)}>>{invented}"}]
+            if "verifica" in low:  # una frase respaldada y tres que la verificación debe descartar
+                evidence = system.split("Pruebas:\n", 1)[1]
+                quote = re.sub(r"^\[[a-z_]+\]\s*", "", evidence).replace("\n", " ")[:40]
+                claims += [{"kind": "dato", "text": "- DATO_RESPALDADO", "quote": quote},
+                           {"kind": "dato", "text": "- DATO_SIN_CIFRAS",
+                            "quote": "esta frase no está en las pruebas"},
+                           {"kind": "dato", "text": "- CIFRA_INVENTADA en 987654 minutos", "quote": quote},
+                           {"kind": "sin_dato", "text": "Escribe a soporte.inventado@getnet.example."}]
+            return completion(tool_calls=[("Synthesis", {"claims": claims})])
+        if not tools and main.SYNTHESIZER_FALLBACK_PROMPT in system:
+            return completion(content="SINTESIS_SIN_VERIFICAR")
         if "search_getnet_knowledge" in tools:  # knowledge
             if "fantasma" in low and "Solo puedes usar estas herramientas" not in system:
                 raise RuntimeError("Error code: 502 - Upstream error from Groq: Tool call validation failed: "
