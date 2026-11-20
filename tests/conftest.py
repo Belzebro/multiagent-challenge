@@ -13,6 +13,7 @@ import re
 import time
 
 os.environ.setdefault("GROQ_API_KEY", "test-key-never-sent")
+os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-never-sent")  # el juez de evals/ nunca llama en tests
 os.environ.setdefault("JWT_SECRET", "pytest-only-secret-0123456789abcdef-0123456789")
 os.environ.setdefault("STATE_DB", ":memory:")  # cada TestClient arranca con un estado vacío
 
