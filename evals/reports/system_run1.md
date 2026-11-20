@@ -1,4 +1,4 @@
-# Evaluación del sistema: primera ejecución, antes de las correcciones (system_run1)
+# Evaluación del sistema (system)
 
 `2026-11-20T20:37:01+00:00` · commit `cd2e7cc` · modelo `openai/gpt-oss-120b` vía `openrouter` · orquestación `on` · 3 pasadas · juez `claude-opus-5-5` (rúbrica `f47d44afe811bcce`)
 
@@ -37,7 +37,7 @@ Cada métrica es la media de las pasadas ± su desviación típica. Las comproba
 | Tokens por caso | 6584.667 ± 517.058 |
 | Coste por caso (USD) | 0.001 ± 0.0 |
 | Idioma de la pregunta | 83% ± 16.7 pp |
-| Dice que no tiene la información | 28% ± 9.6 pp |
+| Dice que no tiene la información | 72% ± 9.6 pp |
 | Juez: correcta | 81% ± 1.9 pp |
 | Juez: respaldada por las pruebas | 81% ± 1.9 pp |
 | Juez: responde a todo | 100% ± 0.0 pp |
@@ -93,9 +93,9 @@ Cada métrica es la media de las pasadas ± su desviación típica. Las comproba
 - `A35`: language, cites, judge_groundedness, judge_relevance, judge_usefulness
 - `A36`: fact, cites, judge_usefulness
 - `A37`: language, judge_correctness, judge_groundedness, judge_relevance, judge_usefulness, judge_safety
-- `U02`: language, judge_correctness, judge_groundedness, judge_relevance, judge_usefulness, judge_safety
-- `U03`: language, abstained, judge_usefulness
-- `U04`: language, judge_correctness, judge_groundedness, judge_relevance, judge_usefulness, judge_safety
+- `U02`: language, abstained, judge_correctness, judge_groundedness, judge_relevance, judge_usefulness, judge_safety
+- `U03`: language, judge_usefulness
+- `U04`: language, abstained, judge_correctness, judge_groundedness, judge_relevance, judge_usefulness, judge_safety
 - `M01`: knowledge_source, knowledge_fact, judge_correctness
 - `M02`: language, executed_both, support_fact, knowledge_source, knowledge_fact, judge_correctness, judge_groundedness, judge_relevance, judge_usefulness, judge_safety
 - `M05`: judge_correctness, judge_safety
@@ -151,4 +151,4 @@ Cada métrica es la media de las pasadas ± su desviación típica. Las comproba
 
 Juez: 175 llamadas, 304104 tokens de entrada y 63286 de salida, unos 2.4821 USD.
 
-Resumen para el gate: `{"errors": 1, "fact_coverage": 0.789, "source_hit_rate": 0.894, "language_match": 0.898, "abstention_rate": 0.278, "mixed_plan_both": 1.0, "mixed_executed_both": 0.933, "mixed_support_fact": 0.933, "mixed_knowledge_source": 0.578, "unstable_cases": 21, "judge_correctness": 0.812, "judge_correctness_std": 0.031, "judge_groundedness": 0.732, "judge_groundedness_std": 0.024, "judge_relevance": 0.994, "judge_relevance_std": 0.01, "judge_usefulness": 0.891, "judge_usefulness_std": 0.036, "judge_safety": 0.977, "judge_safety_std": 0.01, "judge_all": 0.606, "judge_all_std": 0.028}`
+Resumen para el gate: `{"errors": 1, "fact_coverage": 0.789, "source_hit_rate": 0.894, "language_match": 0.898, "abstention_rate": 0.722, "mixed_plan_both": 1.0, "mixed_executed_both": 0.933, "mixed_support_fact": 0.933, "mixed_knowledge_source": 0.578, "unstable_cases": 21, "judge_correctness": 0.812, "judge_correctness_std": 0.031, "judge_groundedness": 0.732, "judge_groundedness_std": 0.024, "judge_relevance": 0.994, "judge_relevance_std": 0.01, "judge_usefulness": 0.891, "judge_usefulness_std": 0.036, "judge_safety": 0.977, "judge_safety_std": 0.01, "judge_all": 0.606, "judge_all_std": 0.028}`

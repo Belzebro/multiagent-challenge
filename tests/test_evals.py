@@ -41,6 +41,12 @@ def test_el_idioma_de_la_respuesta_se_detecta(text, lang):
     "No tengo información sobre la comisión exacta; te recomiendo contactar con Getnet.",
     "I couldn't find that information in Getnet's website.",
     "Não encontrei essa informação no site da Getnet.",
+    # Formas reales de las ejecuciones con el modelo real (la primera regla no las reconocía)
+    "No he encontrado información sobre la comisión exacta que Getnet cobra en México.",
+    "No se encontró información sobre el beneficio neto de Getnet en 2023.",
+    "I’m sorry, but I wasn’t able to locate any information about Getnet’s net profit.",
+    "I’m sorry, but the information I have does not include Getnet’s net profit for 2023.",
+    "Não foi encontrada informação sobre o custo mensal do aluguel de uma maquininha.",
 ])
 def test_la_abstencion_se_reconoce_en_tres_idiomas(text):
     assert run_system.ABSTENTION.search(text)

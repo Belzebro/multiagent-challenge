@@ -36,12 +36,15 @@ from evals.providers import provider_metadata, use_provider  # noqa: E402
 
 SUITES = {"golden": "golden.jsonl", "mixed": "mixed.jsonl"}
 DASHES = re.compile(r"[‐-―−]")  # guiones Unicode (gpt-oss usa el no separable, U+2011)
-ABSTENTION = re.compile(
-    r"no (tengo|dispongo|encuentro|encontr[ée]|aparece|figura|consta|hay (datos|información))|"
-    r"no est[áa] disponible|sin (datos|información)|"
-    r"(don't|do not|couldn't|could not|can't|cannot) (have|find)|not (available|mentioned|found)|"
+ABSTENTION = re.compile(  # formas reales de abstención vistas en las ejecuciones del 20/11/2026
+    r"no (he|hemos) encontrado|no se (ha )?encontr|no (tengo|dispongo|cuento con)|no aparece|no figura|"
+    r"no consta|no hay (datos|información)|no está disponible|sin (datos|información)|"
+    r"(información|documentación) (disponible |consultada )?no (incluye|contiene|menciona)|"
+    r"(don['’]t|do not|couldn['’]t|could not|can['’]t|cannot|wasn['’]t able to|was not able to|unable to) "
+    r"(have|find|locate)|not (available|mentioned|found|included)|does not (include|contain|mention)|"
     r"no (information|data) (about|on)|"
-    r"não (tenho|encontrei|encontro|há (dados|informação)|está disponível|consta)", re.IGNORECASE)
+    r"não (tenho|encontrei|encontro|há (dados|informação)|está disponível|consta)|não foi encontrad|"
+    r"não (inclui|contém)", re.IGNORECASE)
 PT_WORDS = frozenset("não você vocês são também pelo pela às isso esse essa é uma com em dos das nos nas "
                      "ao aos seu sua muito foi".split())
 ES_WORDS = frozenset("el los del también pero muy está son una con en las según usted puede hay es fue "
@@ -375,6 +378,17 @@ def rebuild(report: dict, rows: list[dict]) -> dict:
     return report
 
 
+def recheck(name: str) -> None:
+    """Recalcula las comprobaciones deterministas de un informe con las reglas actuales, sin el LLM."""
+    path = REPORTS / f"{name}.json"
+    report = json.loads(path.read_text())
+    cases = {(c["suite"], c["id"]): c for c in load_cases(list(SUITES))}
+    for row in report["cases"]:
+        row["checks"] = checks(cases[(row["suite"], row["id"])], row)
+    write_report(name, rebuild(report, report["cases"]), markdown(report))
+    print(f"Comprobaciones recalculadas en {path}")
+
+
 def judge_existing(name: str) -> None:
     """Juzga las filas de un informe ya generado que no tienen veredicto válido, y lo reescribe."""
     path = REPORTS / f"{name}.json"
@@ -406,11 +420,16 @@ def main_cli() -> None:
     parser.add_argument("--provider", choices=["groq", "openrouter"], default="groq",
                         help="Transporte del LLM: Groq u OpenRouter con el mismo modelo (providers.py).")
     parser.add_argument("--ids", default="", help="Solo estos casos, separados por comas (pruebas rápidas).")
+    parser.add_argument("--recheck", action="store_true",
+                        help="Solo recalcula las comprobaciones deterministas del informe --name.")
     parser.add_argument("--judge-existing", action="store_true",
                         help="Solo juzga las respuestas sin veredicto del informe --name y lo reescribe.")
     args = parser.parse_args()
     if args.judge_existing:
         judge_existing(args.name)
+        return
+    if args.recheck:
+        recheck(args.name)
         return
 
     provider = use_provider(args.provider)

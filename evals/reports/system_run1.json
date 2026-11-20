@@ -36,7 +36,7 @@
     "fact_coverage": 0.789,
     "source_hit_rate": 0.894,
     "language_match": 0.898,
-    "abstention_rate": 0.278,
+    "abstention_rate": 0.722,
     "mixed_plan_both": 1.0,
     "mixed_executed_both": 0.933,
     "mixed_support_fact": 0.933,
@@ -320,13 +320,13 @@
         ]
       },
       "check_abstained": {
-        "mean": 0.278,
+        "mean": 0.722,
         "std": 0.096,
-        "min": 0.167,
+        "min": 0.667,
         "runs": [
-          0.333,
-          0.333,
-          0.167
+          0.667,
+          0.667,
+          0.833
         ]
       },
       "judge_correctness": {
@@ -740,6 +740,7 @@
       "id": "U02",
       "changed": [
         "language",
+        "abstained",
         "judge_correctness",
         "judge_groundedness",
         "judge_relevance",
@@ -756,7 +757,6 @@
       "id": "U03",
       "changed": [
         "language",
-        "abstained",
         "judge_usefulness"
       ],
       "statuses": [
@@ -769,6 +769,7 @@
       "id": "U04",
       "changed": [
         "language",
+        "abstained",
         "judge_correctness",
         "judge_groundedness",
         "judge_relevance",
@@ -3693,7 +3694,7 @@
       },
       "checks": {
         "language": true,
-        "abstained": false
+        "abstained": true
       }
     },
     {
@@ -3880,7 +3881,7 @@
       },
       "checks": {
         "language": true,
-        "abstained": false
+        "abstained": true
       }
     },
     {
@@ -7985,7 +7986,7 @@
       },
       "checks": {
         "language": true,
-        "abstained": false
+        "abstained": true
       }
     },
     {
@@ -8054,7 +8055,7 @@
       },
       "checks": {
         "language": true,
-        "abstained": false
+        "abstained": true
       }
     },
     {
@@ -12241,7 +12242,7 @@
       },
       "checks": {
         "language": true,
-        "abstained": false
+        "abstained": true
       }
     },
     {
@@ -12310,7 +12311,7 @@
       },
       "checks": {
         "language": true,
-        "abstained": false
+        "abstained": true
       }
     },
     {
@@ -12380,7 +12381,7 @@
       },
       "checks": {
         "language": true,
-        "abstained": false
+        "abstained": true
       }
     },
     {
@@ -12448,7 +12449,7 @@
       },
       "checks": {
         "language": true,
-        "abstained": false
+        "abstained": true
       }
     },
     {
