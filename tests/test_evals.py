@@ -1,6 +1,7 @@
 """Las herramientas de evaluación funcionan sin red: comprobaciones, juez (simulado), κ y controles."""
 
 import asyncio
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -133,3 +134,22 @@ def test_un_caso_que_cambia_entre_pasadas_es_inestable():
     rows = [{**base, "run": 1, "checks": {"fact": True}}, {**base, "run": 2, "checks": {"fact": False}}]
     assert run_system.unstable_cases(rows) == [{"id": "A01", "changed": ["fact"],
                                                 "statuses": ["completed", "completed"]}]
+
+
+# --- Release gate ---------------------------------------------------------------------------------
+def test_el_gate_solo_bloquea_con_dimensiones_del_juez_calibradas(tmp_path, monkeypatch, capsys):
+    from evals import gate
+
+    thresholds = tmp_path / "thresholds.yaml"
+    thresholds.write_text("system:\n  errors: {max: 0}\n  judge_groundedness: {min: 0.9, judge: true}\n")
+    monkeypatch.setattr(gate, "THRESHOLDS", thresholds)
+    report = tmp_path / "system.json"
+    report.write_text(json.dumps({"summary": {"errors": 0, "judge_groundedness": 0.5}}))
+    calibration = tmp_path / "calibration.json"
+    calibration.write_text(json.dumps({"blocking_dimensions": []}))
+    assert gate.main([f"system={report}", f"calibration={calibration}"]) == 0  # sin κ suficiente: orientativa
+    assert "INFO system.judge_groundedness" in capsys.readouterr().out
+    calibration.write_text(json.dumps({"blocking_dimensions": ["groundedness"]}))
+    assert gate.main([f"system={report}", f"calibration={calibration}"]) == 1  # calibrada: bloquea
+    report.write_text(json.dumps({"summary": {"judge_groundedness": 0.95}}))  # falta errors
+    assert gate.main([f"system={report}", f"calibration={calibration}"]) == 1

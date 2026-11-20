@@ -13,6 +13,7 @@ Uso: python -m evals.calibrate build-set | judge-set | kappa
 
 import argparse
 import asyncio
+import hashlib
 import json
 import random
 import re
@@ -111,18 +112,19 @@ def build_set(seed: int = 20261120) -> None:
     items, key = [], {}
     for i, (row, kind, answer) in enumerate(entries, 1):
         item_id = f"L{i:02d}"
-        items.append({"item": item_id, "lang": row["lang"], "question": row["question"],
+        digest = hashlib.sha256(answer.encode()).hexdigest()[:12]  # la etiqueta queda ligada a este texto
+        items.append({"item": item_id, "hash": digest, "lang": row["lang"], "question": row["question"],
                       "reference": row["reference"], "evidence": row["evidence"], "answer": answer})
-        key[item_id] = {"case": row["id"], "run": row["run"], "control": kind,
+        key[item_id] = {"case": row["id"], "run": row["run"], "control": kind, "hash": digest,
                         "judge": row["judge"] if kind is None else None}
     LABELING.mkdir(parents=True, exist_ok=True)
-    ITEMS.write_text(json.dumps(items, ensure_ascii=False, indent=1) + "\n")
+    ITEMS.write_text(json.dumps({"sample": False, "items": items}, ensure_ascii=False, indent=1) + "\n")
     KEY.write_text(json.dumps(key, ensure_ascii=False, indent=1) + "\n")
     print(f"{len(items)} elementos ({len(real)} reales y {len(controls)} controles) en {ITEMS}")
 
 
 async def judge_set() -> None:
-    items = {i["item"]: i for i in json.loads(ITEMS.read_text())}
+    items = {i["item"]: i for i in json.loads(ITEMS.read_text())["items"]}
     key = json.loads(KEY.read_text())
     judge = Judge()
     todo = [item_id for item_id, k in key.items() if not k.get("judge") or "error" in k["judge"]]
@@ -148,7 +150,8 @@ def cohen_kappa(a: list[bool], b: list[bool]) -> float | None:
 
 def kappa() -> None:
     key = json.loads(KEY.read_text())
-    labels = {r["item"]: r for r in load_jsonl(HUMAN_LABELS.name)}
+    labels = {r["item"]: r for r in load_jsonl(HUMAN_LABELS.name)
+              if r.get("hash") == key.get(r["item"], {}).get("hash")}  # solo etiquetas de este mismo texto
     common = [i for i in key if i in labels and key[i].get("judge") and "error" not in key[i]["judge"]]
     dimensions = {}
     for d in DIMENSIONS:
