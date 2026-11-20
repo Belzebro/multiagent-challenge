@@ -40,7 +40,7 @@ def test_un_turno_es_una_traza_con_peticion_grafo_nodos_llm_y_herramientas(chat,
             chain.append(span.name)
         return chain
 
-    assert ancestors("graph")[-1] == "POST /chat"  # FastAPI añade su propio span (fastapi.endpoint)
+    assert ancestors("graph")[-1] == "POST /chat"  # el span HTTP que crea FastAPI, vía fastapi.endpoint
     assert parent("node.router") == "graph"
     assert parent("tool.search_getnet_knowledge") == "node.knowledge_tools"
     assert {by_id[s.parent.span_id].name for s in finished if s.name == "llm.chat"} == {"node.router",
@@ -48,6 +48,12 @@ def test_un_turno_es_una_traza_con_peticion_grafo_nodos_llm_y_herramientas(chat,
     llm = next(s for s in finished if s.name == "llm.chat")
     assert llm.attributes["gen_ai.request.model"] == main.GROQ_MODEL
     assert llm.attributes["gen_ai.usage.input_tokens"] == 10  # lo que devuelve el Groq simulado
+
+
+def test_el_span_http_de_fastapi_lleva_el_request_id(chat, spans):
+    response = chat(QUESTION)
+    root = next(s for s in spans.get_finished_spans() if s.name == "POST /chat" and s.parent is None)
+    assert root.attributes["request.id"] == response.headers["X-Request-ID"]
 
 
 def test_un_fallo_del_llm_queda_marcado_en_su_span(chat, spans):

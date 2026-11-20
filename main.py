@@ -64,7 +64,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import InjectedState, ToolNode, tools_condition
 from langgraph.types import Command, interrupt
-from opentelemetry.trace import SpanKind
+from opentelemetry import trace
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 
@@ -450,9 +450,12 @@ async def summarize_if_needed(state: State) -> dict:
     lines = [f"{'Cliente' if isinstance(m, HumanMessage) else 'Asistente'}: {m.text[:600]}"
              for m in messages[done:cut] if isinstance(m, (HumanMessage, AIMessage)) and m.text]
     previous = state.get("summary") or "(ninguno)"
-    result = await llm.ainvoke([SystemMessage(content=SUMMARY_PROMPT),
-                                HumanMessage(content=f"Resumen anterior:\n{previous}\n\nMensajes nuevos:\n"
-                                                     + "\n".join(lines))])
+    try:
+        request = f"Resumen anterior:\n{previous}\n\nMensajes nuevos:\n" + "\n".join(lines)
+        result = await llm.ainvoke([SystemMessage(content=SUMMARY_PROMPT), HumanMessage(content=request)])
+    except Exception:  # sin resumen, el turno sigue con los mensajes recientes; se reintenta en el siguiente
+        logger.warning("Memoria: no se pudo resumir la conversación; se usan los mensajes recientes.")
+        return {}
     logger.info("Memoria: resumidos %d mensajes (hasta el %d de %d).", cut - done, cut, len(messages))
     return {"summary": result.text, "summarized": cut}
 
@@ -1049,19 +1052,14 @@ async def request_id_middleware(request: Request, call_next):
     if not re.fullmatch(r"[\w.-]{8,64}", request_id):
         request_id = uuid.uuid4().hex
     token = request_id_var.set(request_id)
-    # Span raíz de la petición: los del grafo, los nodos, el LLM y las herramientas cuelgan de él.
-    with obs.tracer.start_as_current_span(f"{request.method} {request.url.path}", kind=SpanKind.SERVER,
-                                          attributes={"http.request.method": request.method,
-                                                      "url.path": request.url.path,
-                                                      "request.id": request_id}) as span:
-        try:
-            response = await call_next(request)
-        finally:
-            request_id_var.reset(token)
-        route = request.scope.get("route")
-        if route is not None:  # nombre con la plantilla de la ruta, sin identificadores
-            span.update_name(f"{request.method} {route.path}")
-        span.set_attribute("http.response.status_code", response.status_code)
+    # FastAPI crea el span HTTP de cada petición (OpenTelemetry integrado); se le añade el X-Request-ID
+    # para pasar de una línea de log a su traza. Los spans del grafo, los nodos, el LLM y las
+    # herramientas cuelgan de él (observability.Telemetry).
+    trace.get_current_span().set_attribute("request.id", request_id)
+    try:
+        response = await call_next(request)
+    finally:
+        request_id_var.reset(token)
     response.headers["X-Request-ID"] = request_id
     return response
 
