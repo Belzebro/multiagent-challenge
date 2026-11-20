@@ -35,6 +35,7 @@ Registro *append-only*: una decisión no se borra; si cambia, se añade otra que
 | [DEC-029](#dec-029) | 2026-11-19 | Calibración humana del juez con etiquetas del usuario | Aceptada | Usuario |
 | [DEC-030](#dec-030) | 2026-11-19 | Claude sigue con ramas, push y merge con la CI en verde | Aceptada | Usuario |
 | [DEC-031](#dec-031) | 2026-11-19 | Recuperación por idioma con un MiniLM multilingüe, umbral 0.42 y sin BM25 | Aceptada | Técnica |
+| [DEC-032](#dec-032) | 2026-11-19 | Estado en Postgres opcional, límite de uso en la base compartida, OIDC con JWKS y resumen de memoria | Aceptada | Técnica |
 
 ---
 
@@ -290,3 +291,15 @@ Estado: **Propuesta**, pendiente de [Q-012](preguntas.md#q-012).
   - 0 abstenciones falsas y 11 de 16 consultas sin respuesta detectadas, también fuera de muestra en validación cruzada.
   - La imagen crece unos 470 MB y el arranque tarda unos segundos más.
   - Si el holdout cambia, el informe recalcula el umbral sugerido y el gate comprueba las abstenciones.
+
+### DEC-032
+
+**Producción: estado en Postgres opcional, límite de uso en la base compartida, OIDC con JWKS y resumen de la memoria (concreta [DEC-019](#dec-019)).**
+
+- **Postgres opcional.** Con `DATABASE_URL`, el checkpointer y las tablas van a Postgres; sin ella, todo sigue en SQLite, así que el arranque local no cambia. El mismo SQL, con `?` como marcador, funciona en los dos motores mediante `SqlDatabase`. Con SQLite se usa el lock del checkpointer, porque comparten la conexión.
+- **Límite de uso con ventana fija por minuto,** contado con un `UPSERT` en la base de datos.
+  - Alternativas: en memoria, que no es global entre réplicas; o Redis, otra pieza que desplegar.
+  - Consecuencia: en el cambio de minuto puede pasar una ráfaga de hasta el doble del límite.
+- **OIDC con JWKS (RS256),** con PyJWT y la caché de claves de `PyJWKClient`. HS256 queda solo para desarrollo, y cada modo acepta un único algoritmo para evitar la confusión de algoritmos.
+- **Resumen incremental** cuando hay más de 30 mensajes sin resumir. Se ejecuta en paralelo con el router y deja completos los 20 últimos.
+- **Test de réplicas.** Dos instancias con conexiones propias en un mismo proceso, contra el Postgres de servicio de la CI. Desplegar procesos separados tras un balanceador no aporta más evidencia sobre el estado compartido y costaría bastante más.

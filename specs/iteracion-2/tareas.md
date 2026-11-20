@@ -56,10 +56,12 @@ Evidencia: [tests/test_telemetry.py](../../tests/test_telemetry.py) (13 pruebas)
 
 ## F15: producción, seguridad y memoria (C)
 
-- [ ] **T-150** Backend Postgres opcional y test de dos instancias en la CI. → PROD2-01
-- [ ] **T-151** Rate limiting por usuario. → SEC2-01
-- [ ] **T-152** RS256 con JWKS. → SEC2-02
-- [ ] **T-153** Resumen de conversaciones largas. → MEM2-01
+Evidencia: [tests/test_postgres.py](../../tests/test_postgres.py), [tests/test_production.py](../../tests/test_production.py) (10 pruebas), la sección «Producción» del [README](../../README.md) y [DEC-032](../decisiones.md#dec-032).
+
+- [x] **T-150** Backend Postgres opcional (`DATABASE_URL`) para checkpoints, tickets, feedback y límites. Test con dos instancias independientes sobre el Postgres de servicio de la CI: memoria, HITL entre réplicas, reclamación atómica y límite global; ejecutado también en local contra Postgres 16. → PROD2-01
+- [x] **T-151** Rate limiting por usuario con un UPSERT atómico en la base compartida: 429 con Retry-After antes de llamar al LLM. → SEC2-01
+- [x] **T-152** RS256 con JWKS (`JWT_JWKS_URL`): rechaza HS256, kid desconocido, otra clave y caducados; 503 si el proveedor no responde. HS256 queda para desarrollo. → SEC2-02
+- [x] **T-153** Resumen incremental de conversaciones largas, en paralelo con el router; los agentes reciben el resumen y los mensajes recientes. → MEM2-01
 
 ## F16: cierre (A)
 
