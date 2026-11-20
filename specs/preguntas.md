@@ -14,8 +14,25 @@ Aquí van las dudas que cambian lo que se construye. Responde debajo de cada una
 | [Q-008](#q-008) | ¿Cómo accede Claude a `GROQ_API_KEY`? | Respondida | [DEC-010](decisiones.md#dec-010) |
 | [Q-009](#q-009) | ¿Se versiona el texto público de getnet.net? | Respondida | [DEC-016](decisiones.md#dec-016) |
 | [Q-010](#q-010) | ¿Se aprueban la especificación y el plan? | Respondida | [DEC-018](decisiones.md#dec-018) |
+| [Q-011](#q-011) | Iteración 2: ¿hora límite de la entrega? | Respondida | [DEC-024](decisiones.md#dec-024) |
+| [Q-012](#q-012) | Iteración 2: ¿Groq Developer, o cambiar a Claude? | **Abierta** | [DEC-026](decisiones.md#dec-026), [DEC-028](decisiones.md#dec-028) |
+| [Q-013](#q-013) | Iteración 2: ¿puede el usuario etiquetar unas 40 respuestas? | Respondida | [DEC-029](decisiones.md#dec-029) |
+| [Q-014](#q-014) | Iteración 2: ¿se aprueban los cambios de arquitectura? | Respondida | [DEC-025](decisiones.md#dec-025), [DEC-027](decisiones.md#dec-027) |
+| [Q-015](#q-015) | Iteración 2: ¿ramas, push y merge con la CI en verde? | Respondida | [DEC-030](decisiones.md#dec-030) |
 
-No hay preguntas abiertas.
+## Abiertas
+
+### Q-012
+
+**¿Activamos Groq Developer, o cambiamos a un modelo de Claude?**
+
+- Recomendación de Claude:
+  - **Los agentes siguen en Groq.** El enunciado exige `ChatGroq`, y los fallos que quedan son de recuperación, no del modelo.
+  - **Groq Developer para las evaluaciones del sistema.** Pago por uso; se calcula menos de 1 USD.
+  - **Claude Opus 5.5 como juez independiente.** Se calculan entre 5 y 15 USD, o la mitad con la Batch API.
+- Para usar Claude como juez hace falta una API key de la Consola de Claude (se factura aparte de la suscripción) en `.env` como `ANTHROPIC_API_KEY`.
+
+**Respuesta:**
 
 ## Respondidas
 
@@ -78,3 +95,27 @@ No hay preguntas abiertas.
 **¿Se aprueban la especificación y el plan?**
 
 **Respuesta (2026-11-13):** aprobadas. Al revisarlas con el contexto de [Q-006](#q-006) se recorta el alcance ([DEC-018](decisiones.md#dec-018)), y DEC-013, DEC-014 y DEC-017 quedan reemplazadas por DEC-020, DEC-019 y DEC-018.
+
+### Q-011
+
+**Iteración 2: ¿a qué hora es la entrega?**
+
+**Respuesta (2026-11-19):** no hay límite estricto, pero conviene enviarla antes de las 18:00 del 2026-11-20, hora de Ciudad de México. → [DEC-024](decisiones.md#dec-024)
+
+### Q-013
+
+**Iteración 2: ¿puede el usuario etiquetar unas 40 respuestas (unos 45 minutos) para calibrar el juez?**
+
+**Respuesta (2026-11-19):** sí. → [DEC-029](decisiones.md#dec-029)
+
+### Q-014
+
+**Iteración 2: ¿se aprueban el plan en el router con supervisor, crítico y sintetizador, y el índice multilingüe adicional?**
+
+**Respuesta (2026-11-19):** sí, si acercan al 9.5. Las alternativas valoradas están en [DEC-025](decisiones.md#dec-025) y [DEC-027](decisiones.md#dec-027).
+
+### Q-015
+
+**Iteración 2: ¿sigue Claude con ramas, push y merge a `main` cuando la CI esté en verde?**
+
+**Respuesta (2026-11-19):** sí. → [DEC-030](decisiones.md#dec-030)

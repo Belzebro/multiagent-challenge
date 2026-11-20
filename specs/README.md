@@ -11,6 +11,15 @@ Esta carpeta es la fuente de verdad de la remediación del feedback V4. El códi
 | [plan.md](plan.md) | Cómo: arquitectura objetivo, fases, línea de corte, riesgos y pruebas | Al aprobar o reordenar fases |
 | [tareas.md](tareas.md) | Tareas atómicas trazables a requisitos, con su evidencia | Al empezar y al cerrar cada tarea |
 
+## Iteraciones
+
+| Iteración | Objetivo | Especificación, plan y tareas |
+|---|---|---|
+| 1 | Remediar el feedback V4 (5.2/10). Resultado: 8.3/10 | [especificacion.md](especificacion.md), [plan.md](plan.md), [tareas.md](tareas.md) |
+| 2 | De 8.3 a 9.5: orquestación multi-especialista, evaluación calibrada, RAG multilingüe, observabilidad y producción | [iteracion-2/](iteracion-2/) |
+
+La constitución, las preguntas y el registro de decisiones son comunes a todas las iteraciones.
+
 ## Flujo
 
 ```text
