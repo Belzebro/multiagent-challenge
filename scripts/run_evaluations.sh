@@ -9,11 +9,11 @@ cd "$(dirname "$0")/.."
 PY=${PYTHON:-python}
 PROVIDER=${PROVIDER:-groq}  # PROVIDER=openrouter: el mismo modelo a través de OpenRouter (DEC-033)
 
-if [ "${1:-}" = "calibrar" ]; then
-  "$PY" -m evals.calibrate judge-set
-  "$PY" -m evals.calibrate kappa
+if [ "${1:-}" = "calibrar" ]; then  # ronda 2 de calibración (DEC-034)
+  "$PY" -m evals.calibrate judge-set --round 2
+  "$PY" -m evals.calibrate kappa --round 2
   "$PY" -m evals.gate retrieval=evals/reports/retrieval.json routing=evals/reports/routing.json \
-    answers=evals/reports/answers.json system=evals/reports/system.json
+    answers=evals/reports/answers.json system=evals/reports/system.json mixed=evals/reports/system_mixed.json
   exit 0
 fi
 
@@ -22,9 +22,12 @@ fi
   --name system_baseline
 # 2. Sistema completo: golden set y mixtas, 3 pasadas, con la comparación frente a la línea base
 "$PY" -m evals.run_system --provider "$PROVIDER" --runs 3 --concurrency 6
+# 2b. Mixtas con la síntesis verificada (DEC-035). El system.json versionado es anterior a ese cambio, que no
+#     toca la vía rápida del golden set; repetir el paso 2 entero lo sustituye.
+"$PY" -m evals.run_system --provider "$PROVIDER" --suite mixed --runs 3 --concurrency 5 --name system_mixed
 # 3. Router: 82 mensajes (42 ataques), 3 pasadas
 "$PY" -m evals.run_routing --provider "$PROVIDER" --runs 3 --pace 0
 # 4. Recuperación (sin LLM) y conjunto de etiquetado: 30 respuestas reales y 10 controles
 "$PY" -m evals.run_retrieval
-"$PY" -m evals.calibrate build-set
-echo "Siguiente paso: publicar evals/labeling/ (items.json) y etiquetar; después, $0 calibrar"
+"$PY" -m evals.calibrate build-set --round 2
+echo "Siguiente paso: publicar evals/labeling/ (items_r2.json) y etiquetar; después, $0 calibrar"

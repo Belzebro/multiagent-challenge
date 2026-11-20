@@ -69,7 +69,7 @@ jobs:
           python -m evals.run_retrieval --out-dir "$RUNNER_TEMP/evals"
           python -m evals.gate retrieval="$RUNNER_TEMP/evals/retrieval.json" \
             routing=evals/reports/routing.json answers=evals/reports/answers.json \
-            system=evals/reports/system.json
+            system=evals/reports/system.json mixed=evals/reports/system_mixed.json
 
   docker:
     name: Imagen Docker y smoke test
