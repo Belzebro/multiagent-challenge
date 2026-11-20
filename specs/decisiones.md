@@ -37,6 +37,7 @@ Registro *append-only*: una decisión no se borra; si cambia, se añade otra que
 | [DEC-031](#dec-031) | 2026-11-19 | Recuperación por idioma con un MiniLM multilingüe, umbral 0.42 y sin BM25 | Aceptada | Técnica |
 | [DEC-032](#dec-032) | 2026-11-19 | Estado en Postgres opcional, límite de uso en la base compartida, OIDC con JWKS y resumen de memoria | Aceptada | Técnica |
 | [DEC-033](#dec-033) | 2026-11-20 | Evaluaciones con el mismo modelo vía OpenRouter y juez Claude Opus 5.5 | Aceptada | Usuario y técnica |
+| [DEC-034](#dec-034) | 2026-11-20 | Segunda ronda de calibración con el instrumento corregido; decide el gate | Aceptada | Usuario y técnica |
 
 ---
 
@@ -320,3 +321,21 @@ Estado: **reemplazada por [DEC-033](#dec-033)**: Groq no permitía subir al plan
 - Consecuencias:
   - Coste estimado: menos de 2 USD de OpenRouter y unos 11–13 USD de juez.
   - El juez es Opus en lugar de Sonnet, por decisión del usuario, para tener el mejor acuerdo posible con las etiquetas humanas.
+
+### DEC-034
+
+**Segunda ronda de calibración con el instrumento corregido. Es la ronda que decide qué dimensiones del juez bloquean el gate.**
+
+- Contexto: en la ronda 1 (40 respuestas), solo «responde a todo» llegó a κ ≥ 0.6, y la persona detectó 4 de los 10 controles. Al revisar la página aparecieron dos fallos del instrumento. No mostraba qué comercio pregunta, así que no se podían reconocer los datos de un tercero. Tampoco tenía una guía con ejemplos de la rúbrica.
+- Decisión, registrada antes de etiquetar la ronda 2:
+  - 40 respuestas nuevas de la ejecución final ([system.json](../evals/reports/system.json)), a ciegas: 30 reales, empezando por las preguntas que no salieron en la ronda 1, y 10 controles con textos nuevos.
+  - La página muestra el comercio que pregunta y una guía sacada de la rúbrica v1, que no cambia. Los ejemplos de la guía son inventados: no salen de las respuestas ni de los veredictos del juez.
+  - La ronda 2 decide qué dimensiones bloquean el gate, con el mismo umbral (κ ≥ 0.6), tanto si el κ sube respecto a la ronda 1 como si baja. La ronda 1 se publica como piloto ([calibration_r1.md](../evals/reports/calibration_r1.md)).
+- Alternativas descartadas:
+  - Volver a etiquetar las mismas 40 respuestas: la persona ya conoce los desacuerdos y los veredictos del juez.
+  - Cambiar de métrica después de ver el resultado, por ejemplo al AC1 de Gwet.
+  - Adjudicar los desacuerdos viendo las razones del juez, porque sesga las etiquetas hacia él.
+- Consecuencias:
+  - La persona conoce el análisis de la ronda 1, que funciona como formación en la rúbrica. Queda declarado.
+  - Coste: 0.18 USD de juez para los 10 controles nuevos; las respuestas reales ya tenían veredicto.
+
