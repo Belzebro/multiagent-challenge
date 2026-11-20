@@ -83,18 +83,44 @@ def test_si_el_critico_rechaza_la_revision_se_entrega_registrado(chat, fake_groq
 
 
 # --- Parada adaptativa ----------------------------------------------------------------------------
-def test_tope_de_especialistas_por_turno(chat):
+def test_tope_de_especialistas_por_turno(chat, fake_groq):
     body = chat("Caso saltos: busca muchas cosas").json()
-    assert len(body["agents"]) == main.MAX_HOPS
-    assert body["plan"][-1]["status"] == "skipped"
+    assert body["agents"] == ["knowledge", "support", "knowledge", "support"]  # MAX_HOPS
+    # tras el cuarto especialista ya no se consulta al supervisor: se sintetiza
+    assert len(calls_with_tool(fake_groq, "SupervisorDecision")) == main.MAX_HOPS - 1
     assert body["response"].startswith("SINTESIS<<")
 
 
-def test_sin_progreso_el_supervisor_no_repite_y_sintetiza(chat):
+def test_si_pide_repetir_lo_hecho_sigue_con_el_plan(chat):
     body = chat("Caso repite: busca A y luego B").json()
-    assert body["agents"] == ["knowledge"]
+    assert body["agents"] == ["knowledge", "support"]
+    assert [s["status"] for s in body["plan"]] == ["done", "done"]
+    assert body["response"] == "SINTESIS<<knowledge+support>>"
+
+
+def test_parafrasear_al_mismo_especialista_no_crea_un_bucle(chat):
+    """Fallo encontrado con el modelo real: el supervisor pedía a Support lo mismo con otras palabras."""
+    body = chat("Caso parafrasea: mi terminal no conecta y quiero la guía").json()
+    assert body["agents"] == ["support", "support", "knowledge"]  # Support repite una vez como máximo
+    assert ("knowledge", "done") in [(s["agent"], s["status"]) for s in body["plan"]]
+
+
+def test_la_sintesis_declara_las_subtareas_que_no_se_hicieron(chat, fake_groq):
+    body = chat("Caso temprano: mi terminal no conecta y quiero la guía").json()
     assert [s["status"] for s in body["plan"]] == ["done", "skipped"]
-    assert body["response"] == "SINTESIS<<knowledge>>"
+    note = next(m["content"] for m in synthesizer_calls(fake_groq)[0]["messages"]
+                if m["role"] == "system" and "Hallazgos de los especialistas" in m["content"])
+    assert "no se pudieron hacer" in note and "Guía oficial para configurar el Wi-Fi" in note
+
+
+def test_el_critico_rechaza_citas_sin_fuentes_sin_llamar_al_llm(chat, fake_groq):
+    """Fallo encontrado con el modelo real: la síntesis citaba [1] sin ninguna búsqueda en el turno."""
+    body = chat("Caso citafalsa: terminal y cobros").json()
+    assert body["critic"] == "approved_after_revision"
+    assert body["response"] == "SINTESIS_REVISADA<<support+support>>"
+    assert len(calls_with_tool(fake_groq, "CriticVerdict")) == 1  # la primera revisión fue determinista
+    revision = synthesizer_calls(fake_groq)[1]
+    assert any(main.UNSOURCED_CITATIONS in (m.get("content") or "") for m in revision["messages"])
 
 
 # --- Humano o agente ------------------------------------------------------------------------------

@@ -8,7 +8,7 @@ Cada tarea enlaza a sus requisitos ([especificación](especificacion.md)) y, al 
 
 ## F11: orquestación (A)
 
-Evidencia: [tests/test_orchestration.py](../../tests/test_orchestration.py) (12 pruebas) y la sección «Arquitectura de orquestación» del [README](../../README.md).
+Evidencia: [tests/test_orchestration.py](../../tests/test_orchestration.py) (15 pruebas) y la sección «Arquitectura de orquestación» del [README](../../README.md).
 
 - [x] **T-110** `RouteDecision` con `plan`; el estado añade `plan`, `findings`, `hops`, `route` y `review`, y el router los reinicia en cada turno. → ORQ2-01
 - [x] **T-111** Especialistas que trabajan sobre la subtarea asignada y terminan en el supervisor. → ORQ2-02
@@ -17,6 +17,7 @@ Evidencia: [tests/test_orchestration.py](../../tests/test_orchestration.py) (12 
 - [x] **T-114** Nodo de escalado con `interrupt()` y continuación del plan tras un ticket. → ORQ2-07, ORQ2-09
 - [x] **T-115** Respuesta de la API con `agents` y `plan`; README con el patrón y su evidencia. → ORQ2-01 a ORQ2-09
 - [x] **T-116** Tests: consulta mixta Support → Knowledge, Knowledge → Support, replanificación, crítica con revisión, tope de saltos, vía rápida sin llamadas extra, escalado y HITL a mitad de plan. → ORQ2-01 a ORQ2-09
+- [x] **T-117** Endurecimiento tras la prueba con el modelo real, que mostró un bucle del supervisor (pedía a Support lo mismo con otras palabras) y una síntesis con citas inventadas que el crítico aprobó: el supervisor no repite subtareas ni encarga más de 2 al mismo especialista, la síntesis declara lo que no se hizo y el crítico rechaza las citas sin fuentes sin llamar al LLM. → ORQ2-04, ORQ2-05, ORQ2-06
 
 ## F12: RAG (B)
 

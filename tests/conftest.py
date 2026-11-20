@@ -62,6 +62,7 @@ class FakeGroq:
     # Palabra clave del mensaje -> plan que devuelve el router (la primera que aparezca gana).
     PLANS = [
         ("saltos", [("knowledge", "búsqueda 0"), ("support", "Revisión final")]),
+        ("citafalsa", [("support", "Diagnosticar el terminal"), ("support", "Revisar los cobros")]),
         ("repite", [("knowledge", "Buscar A"), ("support", "Buscar B")]),
         ("inverso", [("knowledge", "Condiciones oficiales de los reembolsos"),
                      ("support", "Estado de mis transacciones")]),
@@ -108,9 +109,11 @@ class FakeGroq:
         if not tools and main.FINAL_ANSWER_NOTE in system:
             return completion(content="RESPUESTA_FINAL_SIN_HERRAMIENTAS")  # tope de herramientas del turno
         if not tools and main.SYNTHESIZER_PROMPT in system:
-            label = "SINTESIS_REVISADA" if "El revisor pidió corregir" in system else "SINTESIS"
+            revised = "El revisor pidió corregir" in system
             agents = re.findall(r"^- (knowledge|support) ·", system, re.MULTILINE)
-            return completion(content=f"{label}<<{'+'.join(agents)}>>")
+            invented = " según la guía [1]" if "citafalsa" in low and not revised else ""  # cita sin fuente
+            label = "SINTESIS_REVISADA" if revised else "SINTESIS"
+            return completion(content=f"{label}<<{'+'.join(agents)}>>{invented}")
         if "search_getnet_knowledge" in tools:  # knowledge
             if "bucle" in low:  # el LLM no deja de buscar
                 query = {"query": f"intento {len(turn_tools)}"}
@@ -146,10 +149,16 @@ class FakeGroq:
             return decide("finish")
         if "escalar" in low:
             return decide("escalate")
-        if "saltos" in low:  # cada vez pide una búsqueda nueva: lo corta el tope de especialistas
-            return decide("delegate", "knowledge", f"búsqueda {system.count('[hecha]')}")
+        if "saltos" in low:  # cada vez pide una subtarea nueva al otro especialista: lo corta el tope
+            done = re.findall(r"^- (knowledge|support) ·", system, re.MULTILINE)
+            other = "support" if done[-1] == "knowledge" else "knowledge"
+            return decide("delegate", other, f"búsqueda {len(done)}")
         if "repite" in low:  # pide otra vez una subtarea ya hecha: sin progreso
             return decide("delegate", "knowledge", "Buscar A")
+        if "parafrasea" in low:  # pide a Support lo mismo con otras palabras una y otra vez
+            return decide("delegate", "support", f"El mismo diagnóstico, versión {system.count('[hecha]')}")
+        if "temprano" in low:  # sintetiza con una subtarea aún pendiente
+            return decide("synthesize")
         if "ampliar" in low and "Revisar transacciones" not in system:
             return decide("delegate", "support", "Revisar transacciones rechazadas")
         if "replan" in low and "[pendiente] knowledge" in system:
