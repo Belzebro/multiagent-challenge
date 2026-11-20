@@ -46,7 +46,7 @@ def test_el_corpus_real_no_tiene_fragmentos_duplicados(monkeypatch):
 
 def test_la_respuesta_incluye_las_fuentes_recuperadas(chat):
     body = chat("¿Qué soluciones de pago online ofrece Getnet?").json()
-    indexed = {d.metadata["source"] for d in main._vectorstore.docstore._dict.values()}
+    indexed = {d.metadata["source"] for d in main._knowledge.english.docstore._dict.values()}
     assert body["sources"] and set(body["sources"]) <= indexed
 
 
@@ -58,3 +58,33 @@ def test_la_tool_numera_los_fragmentos_con_su_url(client):
 
 def test_las_respuestas_de_soporte_no_traen_fuentes(chat):
     assert chat("Mi terminal no conecta y me rechazó un cobro").json()["sources"] == []
+
+
+# --- Recuperación multilingüe, fusión y abstención (iteración 2) ---------------------------------
+def test_el_detector_de_idioma_separa_el_ingles_del_resto():
+    assert main.is_english("How do I join Getnet's partner ecosystem?")
+    assert main.is_english("Get Checkout")  # sin palabras funcionales: el idioma del corpus
+    assert not main.is_english("¿Qué terminales de pago hay para tiendas físicas?")
+    assert not main.is_english("Soluciones de pago para restaurantes y bares")
+    assert not main.is_english("Quais terminais de pagamento a Getnet oferece?")
+
+
+def test_rrf_premia_lo_que_aparece_en_los_dos_rankings():
+    a, b, c = (Document(page_content=x) for x in "abc")
+    assert [d.page_content for d in main.reciprocal_rank_fusion([[a, b], [b, c]])] == ["b", "a", "c"]
+
+
+def test_minilm_solo_vota_en_las_consultas_en_ingles(offline_kb, monkeypatch):
+    kb = main.build_knowledge_base()
+    calls = []
+    english_search = kb.english.similarity_search
+    monkeypatch.setattr(kb.english, "similarity_search",
+                        lambda query, k: calls.append(query) or english_search(query, k=k))
+    assert kb.search("online payments")
+    assert kb.search("pagos online con Getnet")  # el índice multilingüe responde solo
+    assert calls == ["online payments"]
+
+
+def test_por_debajo_del_umbral_la_tool_se_abstiene(client):
+    content, sources = main.search_getnet_knowledge.func("receta de paella valenciana")
+    assert (content, sources) == (main.NO_RELEVANT_RESULTS, [])

@@ -34,6 +34,7 @@ Registro *append-only*: una decisión no se borra; si cambia, se añade otra que
 | [DEC-028](#dec-028) | 2026-11-19 | Groq Developer para las evaluaciones del sistema | Propuesta (Q-012) | Técnica |
 | [DEC-029](#dec-029) | 2026-11-19 | Calibración humana del juez con etiquetas del usuario | Aceptada | Usuario |
 | [DEC-030](#dec-030) | 2026-11-19 | Claude sigue con ramas, push y merge con la CI en verde | Aceptada | Usuario |
+| [DEC-031](#dec-031) | 2026-11-19 | Recuperación por idioma con un MiniLM multilingüe, umbral 0.42 y sin BM25 | Aceptada | Técnica |
 
 ---
 
@@ -271,3 +272,21 @@ Estado: **Propuesta**, pendiente de [Q-012](preguntas.md#q-012).
 ### DEC-030
 
 **Claude sigue creando ramas, haciendo push y merge a `main` con la CI en verde en la iteración 2 ([Q-015](preguntas.md#q-015)).**
+
+### DEC-031
+
+**Recuperación por idioma con `paraphrase-multilingual-MiniLM-L12-v2`, umbral de 0.42 y sin BM25 (concreta [DEC-027](#dec-027)).**
+
+- Contexto: el holdout pasó de 47 a 91 consultas (T-120). Cada alternativa se midió con él ([retrieval.md](../evals/reports/retrieval.md)).
+- Decisión:
+  - MiniLM solo vota en las consultas en inglés. Las detecta `is_english`, por palabras funcionales, que acierta en las 131 consultas de los datasets.
+  - El índice multilingüe vota siempre y decide la abstención: el mejor fragmento necesita un coseno de 0.42, que es el de la consulta con respuesta más baja del holdout menos 0.03.
+- Alternativas medidas y descartadas:
+  - `multilingual-e5-small`: mejor MRR (0.885 frente a 0.824 con la fusión por idioma), pero separa peor las consultas sin respuesta (8 de 16 frente a 12 de 16 con la misma regla) y exige los prefijos `query:` y `passage:`.
+  - RRF de los dos índices en todas las consultas: el español baja de 0.84 a 0.67, porque los rankings de MiniLM en español son ruido.
+  - BM25 con RRF: baja el recall@4 en todas las variantes; solo en inglés, de 0.955 a 0.910. Con el corpus en inglés, en los demás idiomas no puede ayudar.
+- Consecuencias:
+  - recall@4 de 0.897: 0.955 en inglés y 0.844 en español.
+  - 0 abstenciones falsas y 11 de 16 consultas sin respuesta detectadas, también fuera de muestra en validación cruzada.
+  - La imagen crece unos 470 MB y el arranque tarda unos segundos más.
+  - Si el holdout cambia, el informe recalcula el umbral sugerido y el gate comprueba las abstenciones.

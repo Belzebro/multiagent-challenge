@@ -4,7 +4,7 @@ Los tests (`tests/`) comprueban que el sistema ejecuta bien cada decisión con u
 
 | Suite | Qué mide | LLM | Dónde corre | Informe |
 |---|---|---|---|---|
-| [run_retrieval.py](run_retrieval.py) | recall@4, MRR@10 y nDCG@10 de 42 consultas (inglés y español) contra el índice de v4 y el actual; similitud de 5 consultas sin respuesta | No | En la CI, en cada push y PR | [retrieval.md](reports/retrieval.md) |
+| [run_retrieval.py](run_retrieval.py) | recall@4 por idioma, MRR@10 y nDCG@10 de 75 consultas (inglés, español y portugués), y abstención en 16 sin respuesta. Compara la recuperación desplegada con v4, v5 y tres ablaciones, y valida el umbral con validación cruzada | No | En la CI, en cada push y PR | [retrieval.md](reports/retrieval.md) |
 | [run_routing.py](run_routing.py) | Accuracy del router, matriz de confusión, ataques bloqueados y consultas legítimas bloqueadas por error (30 casos) | Groq | A mano | [routing.md](reports/routing.md) |
 | [run_answers.py](run_answers.py) | Extremo a extremo (10 preguntas): ruta, página fuente, dato clave, idioma y citas, con reglas deterministas | Groq | A mano | [answers.md](reports/answers.md) |
 
@@ -32,7 +32,7 @@ La evaluación de respuestas se ejecutó tres veces el 13/11/2026, y las dos pri
 
 ```bash
 pip install -r requirements.lock -r requirements-dev.txt
-python -m evals.run_retrieval                  # sin LLM, unos 30 s
+python -m evals.run_retrieval                  # sin LLM, unos 30 s (más la primera descarga de los modelos)
 python -m evals.run_routing                    # Groq: ≈ 30 llamadas, unos 5 min (plan gratuito)
 python -m evals.run_answers                    # Groq: ≈ 40 llamadas, unos 7 min
 python -m evals.gate retrieval=evals/reports/retrieval.json routing=evals/reports/routing.json answers=evals/reports/answers.json

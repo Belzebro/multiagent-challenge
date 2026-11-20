@@ -20,9 +20,10 @@ RUN useradd --create-home --no-log-init --uid 10001 appuser \
  && mkdir -p /app/data/state && chown -R appuser /app/data
 USER appuser
 
-# 3. Modelo de embeddings incluido en la imagen: el contenedor arranca sin descargar nada
+# 3. Modelos de embeddings incluidos en la imagen: el contenedor arranca sin descargar nada
 #    de Hugging Face y sin depender de su disponibilidad.
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+RUN python -c "from sentence_transformers import SentenceTransformer as S; \
+S('all-MiniLM-L6-v2'); S('paraphrase-multilingual-MiniLM-L12-v2')"
 ENV HF_HUB_OFFLINE=1
 
 # 4. Código al final: cambiar main.py no invalida las capas de dependencias ni del modelo.
@@ -32,8 +33,8 @@ COPY data/corpus/ data/corpus/
 
 EXPOSE 8000
 
-# uvicorn no acepta conexiones hasta terminar el lifespan (índice RAG construido).
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+# uvicorn no acepta conexiones hasta terminar el lifespan (los dos índices del RAG construidos).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=4)" || exit 1
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

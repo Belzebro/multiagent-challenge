@@ -29,6 +29,7 @@ import logging
 import os
 import re
 import time
+import unicodedata
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -115,6 +116,8 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
 GETNET_URL = "https://www.getnet.net/en"
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+# Segundo índice: MiniLM solo entiende inglés (recall@4 de 0.39 en español). Ver DEC-031.
+MULTILINGUAL_EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 MAX_GRAPH_STEPS = 40  # tope de seguridad; los controles reales son MAX_TOOL_CALLS_PER_TURN y MAX_HOPS
 
 llm = ChatGroq(model=GROQ_MODEL, api_key=GROQ_API_KEY, temperature=0, timeout=30, max_retries=2)
@@ -247,7 +250,6 @@ async def guardrail_node(_state: State) -> dict:
 # --------------------------------------------------------------------------------------
 # 4. Agent 2: Knowledge Agent (RAG en memoria sobre la web de Getnet)
 # --------------------------------------------------------------------------------------
-_vectorstore: FAISS | None = None  # se construye una sola vez, al arrancar la API
 
 # Snapshot versionado de las páginas EN de getnet.net (scripts/ingest.py, con WebBaseLoader y solo el
 # contenido de <main>). Si no existe, se descarga https://www.getnet.net/en en vivo, como en el enunciado.
@@ -282,23 +284,91 @@ def split_unique(docs: list[Document]) -> list[Document]:
     return chunks
 
 
-def build_vectorstore() -> FAISS:
-    """Corpus de Getnet -> fragmentos únicos -> embeddings all-MiniLM-L6-v2 -> índice FAISS en memoria."""
-    return FAISS.from_documents(split_unique(load_corpus()),
-                                HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL))
+# Recuperación (calibrada con evals/datasets/retrieval.jsonl; ver evals/reports/retrieval.md y DEC-031):
+RRF_K, RRF_CANDIDATES = 60, 20  # constante estándar de RRF y candidatos que aporta cada índice
+# Coseno multilingüe mínimo del mejor fragmento. Queda 0.03 por debajo de la consulta con respuesta más
+# baja del holdout y detecta 11 de las 16 sin respuesta; las demás las resuelve el agente al leer.
+RELEVANCE_THRESHOLD = 0.42
+NO_RELEVANT_RESULTS = ("Sin resultados relevantes: ningún fragmento de la web de Getnet se parece lo "
+                       "bastante a la consulta.")
+
+# Detector de idioma mínimo, por palabras funcionales: acierta en las 131 consultas de los datasets.
+_ENGLISH_WORDS = frozenset(
+    "the what how which who why when where is are was does did can could should would will my your our "
+    "for with and of to from about there this that these those it its i me we you they".split())
+_OTHER_WORDS = frozenset(
+    "el la los las del que como para por con mis una unos unas es son hay puedo cual cuales cuanto donde "
+    "quien porque tiene tengo mi su sus lo le les nos este esta estos estas pero muy mas os da das dos na "
+    "no nas um uma com meu minha seu sua quais qual posso tem sao nao voce".split())
+_NON_ENGLISH_CHARS = re.compile(r"[¿¡ñãõçáéíóúâêô]")
+
+
+def is_english(text: str) -> bool:
+    lowered = text.lower()
+    folded = "".join(c for c in unicodedata.normalize("NFKD", lowered) if not unicodedata.combining(c))
+    words = re.findall(r"\w+", folded)
+    other = sum(w in _OTHER_WORDS for w in words) + 2 * bool(_NON_ENGLISH_CHARS.search(lowered))
+    return sum(w in _ENGLISH_WORDS for w in words) >= other
+
+
+def reciprocal_rank_fusion(rankings: list[list[Document]]) -> list[Document]:
+    """RRF: cada fragmento suma 1 / (RRF_K + posición) en cada ranking en el que aparece."""
+    scores: dict[str, float] = {}
+    docs: dict[str, Document] = {}
+    for ranking in rankings:
+        for rank, doc in enumerate(ranking, 1):
+            key = doc.page_content  # los fragmentos son únicos (split_unique)
+            scores[key] = scores.get(key, 0.0) + 1 / (RRF_K + rank)
+            docs.setdefault(key, doc)
+    return [docs[key] for key in sorted(scores, key=scores.get, reverse=True)]
+
+
+@dataclass
+class KnowledgeBase:
+    """Los mismos fragmentos en dos índices FAISS, fusionados con RRF según el idioma de la consulta.
+
+    - english: all-MiniLM-L6-v2 (el del enunciado). Es monolingüe, así que solo vota en inglés.
+    - multilingual: vota siempre, y su similitud decide la abstención.
+    """
+
+    english: FAISS
+    multilingual: FAISS
+
+    def search(self, query: str, k: int = 4) -> list[Document]:
+        hits = self.multilingual.similarity_search_with_score(query, k=RRF_CANDIDATES)
+        # Vectores normalizados e IndexFlatL2 (distancia al cuadrado): coseno = 1 - d²/2.
+        if not hits or 1 - hits[0][1] / 2 < RELEVANCE_THRESHOLD:
+            return []  # abstención: mejor ningún fragmento que cuatro irrelevantes
+        rankings = [[doc for doc, _ in hits]]
+        if is_english(query):
+            rankings.append(self.english.similarity_search(query, k=RRF_CANDIDATES))
+        return reciprocal_rank_fusion(rankings)[:k]
+
+
+_knowledge: KnowledgeBase | None = None  # se construye una sola vez, al arrancar la API
+
+
+def build_knowledge_base() -> KnowledgeBase:
+    """Corpus de Getnet -> fragmentos únicos -> dos índices FAISS en memoria (inglés y multilingüe)."""
+    chunks = split_unique(load_corpus())
+    english = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+    multilingual = HuggingFaceEmbeddings(model_name=MULTILINGUAL_EMBEDDING_MODEL,
+                                         encode_kwargs={"normalize_embeddings": True})
+    return KnowledgeBase(english=FAISS.from_documents(chunks, english),
+                         multilingual=FAISS.from_documents(chunks, multilingual))
 
 
 @tool(response_format="content_and_artifact")
 def search_getnet_knowledge(query: str) -> tuple[str, list[str]]:
     """Busca información oficial en la web de Getnet: la empresa, sus productos y soluciones de
     pago (presenciales, online, omnicanal), sectores que atiende y servicios de valor añadido.
-    Escribe la consulta en inglés, porque el contenido indexado está en inglés. Cada fragmento
-    indica la página de la que procede."""
-    if _vectorstore is None:
+    El contenido está en inglés: escribe la consulta en inglés si puedes (también entiende otros
+    idiomas). Cada fragmento indica la página de la que procede."""
+    if _knowledge is None:
         return "La base de conocimiento de Getnet no está disponible en este momento.", []
-    docs = _vectorstore.similarity_search(query, k=4)
+    docs = _knowledge.search(query, k=4)
     if not docs:
-        return "Sin resultados relevantes.", []
+        return NO_RELEVANT_RESULTS, []
     content = "\n\n---\n\n".join(
         f"[{i}] {d.metadata.get('title', '')} ({d.metadata.get('source', '')})\n{d.page_content}"
         for i, d in enumerate(docs, 1)
@@ -808,11 +878,12 @@ tickets: TicketStore | None = None
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Al arrancar: base de conocimiento (RAG) y estado persistente (checkpoints y tickets)."""
-    global _vectorstore, graph, tickets
+    global _knowledge, graph, tickets
     logger.info("Indexando %s ...", GETNET_URL)
     try:
-        _vectorstore = await asyncio.to_thread(build_vectorstore)
-        logger.info("Base de conocimiento lista: %d fragmentos.", _vectorstore.index.ntotal)
+        _knowledge = await asyncio.to_thread(build_knowledge_base)
+        logger.info("Base de conocimiento lista: %d fragmentos en dos índices.",
+                    _knowledge.english.index.ntotal)
     except Exception:
         # Degradación controlada: guardrail y soporte siguen funcionando sin el RAG.
         logger.exception("No se pudo construir la base de conocimiento.")
@@ -1027,7 +1098,7 @@ async def health_ready() -> JSONResponse:
     except Exception:
         state_db = "error"
     body = {"status": "ready" if state_db == "ok" else "not_ready", "state_db": state_db,
-            "knowledge_base": "ready" if _vectorstore is not None else "degraded"}
+            "knowledge_base": "ready" if _knowledge is not None else "degraded"}
     return JSONResponse(body, status_code=200 if state_db == "ok" else 503)
 
 

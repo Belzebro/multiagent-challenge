@@ -31,5 +31,5 @@ def test_health_ready_con_estado_y_rag(client):
 
 
 def test_health_ready_degradado_sin_rag(client, monkeypatch):
-    monkeypatch.setattr(main, "_vectorstore", None)
+    monkeypatch.setattr(main, "_knowledge", None)
     assert client.get("/health/ready").json()["knowledge_base"] == "degraded"

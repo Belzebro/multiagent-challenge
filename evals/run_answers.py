@@ -45,7 +45,7 @@ def language(text: str) -> str:
 
 
 async def run(cases: list[dict], pace: float) -> tuple[list[dict], dict]:
-    main._vectorstore = await asyncio.to_thread(main.build_vectorstore)
+    main._knowledge = await asyncio.to_thread(main.build_knowledge_base)
     graph = main.build_graph()  # sin checkpointer: cada caso es una conversación nueva
     rows = []
     with get_usage_metadata_callback() as usage:
