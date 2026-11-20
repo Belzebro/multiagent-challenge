@@ -1,3 +1,4 @@
 # Herramientas de desarrollo y CI (además de requirements.lock).
 pytest==9.2.0
 ruff==0.17.4
+rank-bm25==0.2.2  # solo para la ablación de BM25 en evals/run_retrieval.py

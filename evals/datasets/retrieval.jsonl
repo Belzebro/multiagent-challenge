@@ -40,8 +40,52 @@
 {"id": "Q40", "lang": "es", "query": "¿Se puede pagar con Bizum en el datáfono de una tienda?", "relevant": ["https://www.getnet.net/en/resources/client-stories/bizum"]}
 {"id": "Q41", "lang": "es", "query": "Soluciones de pago para restaurantes y bares", "relevant": ["https://www.getnet.net/en/your-business/industries/restaurants"]}
 {"id": "Q42", "lang": "es", "query": "¿Qué es el comercio agéntico?", "relevant": ["https://www.getnet.net/en/our-solutions/agentic-commerce", "https://www.getnet.net/en/resources/blog/agentic-payments"]}
+{"id": "Q43", "lang": "es", "query": "¿Quién está detrás de Getnet y a qué se dedica?", "relevant": ["https://www.getnet.net/en/corporate/about-us", "https://www.getnet.net/en"]}
+{"id": "Q44", "lang": "es", "query": "¿Hay una comunidad de desarrolladores para integrarse con Getnet?", "relevant": ["https://www.getnet.net/en/developers", "https://www.getnet.net/en/resources/blog/why-developer-collaboration-no-longer-stops-at-hackathons"]}
+{"id": "Q45", "lang": "es", "query": "¿Qué cookies utiliza la web de Getnet y para qué?", "relevant": ["https://www.getnet.net/en/legal/cookies"]}
+{"id": "Q46", "lang": "es", "query": "¿Cómo se tratan mis datos personales y qué derechos tengo?", "relevant": ["https://www.getnet.net/en/legal/privacy-policy"]}
+{"id": "Q47", "lang": "es", "query": "¿Cómo puede un empleado denunciar una conducta poco ética?", "relevant": ["https://www.getnet.net/en/legal/conduct-and-canal-abierto"]}
+{"id": "Q48", "lang": "es", "query": "¿Existe una sola API para cobrar en varios países de Latinoamérica?", "relevant": ["https://www.getnet.net/en/our-solutions/omnichannel"]}
+{"id": "Q49", "lang": "es", "query": "Herramientas para vender más por internet y evitar el fraude en los pagos", "relevant": ["https://www.getnet.net/en/our-solutions/online-payments"]}
+{"id": "Q50", "lang": "es", "query": "¿Cómo me convierto en socio o partner de Getnet?", "relevant": ["https://www.getnet.net/en/partners"]}
+{"id": "Q51", "lang": "es", "query": "¿Qué debe saber un comercio sobre la banca abierta?", "relevant": ["https://www.getnet.net/en/resources/blog/4-things-every-merchant-needs-to-know-about-open-banking"]}
+{"id": "Q52", "lang": "es", "query": "¿Cuáles son los medios de pago más usados en México?", "relevant": ["https://www.getnet.net/en/resources/blog/payment-trends-in-mexico"]}
+{"id": "Q53", "lang": "es", "query": "¿Cómo reduzco el abandono del carrito mejorando el proceso de pago?", "relevant": ["https://www.getnet.net/en/resources/blog/optimising-your-checkout-process"]}
+{"id": "Q54", "lang": "es", "query": "¿Cómo crecen los pagos con el móvil y las billeteras digitales en América Latina?", "relevant": ["https://www.getnet.net/en/resources/blog/the-mobile-payment-revolution-in-latin-america"]}
+{"id": "Q55", "lang": "es", "query": "¿Qué son las finanzas embebidas y para qué sirven?", "relevant": ["https://www.getnet.net/en/resources/blog/why-embedded-finance-is-transforming-fintech"]}
+{"id": "Q56", "lang": "es", "query": "Convertir los móviles de los repartidores en terminales para cobrar con tarjeta", "relevant": ["https://www.getnet.net/en/resources/client-stories/connects-pascual"]}
+{"id": "Q57", "lang": "es", "query": "Cobrar más rápido la comida y la bebida en un estadio de fútbol durante el descanso", "relevant": ["https://www.getnet.net/en/resources/client-stories/zig"]}
+{"id": "Q58", "lang": "es", "query": "Pagos para reservas de hoteles, vuelos y viajes", "relevant": ["https://www.getnet.net/en/your-business/industries/travel", "https://www.getnet.net/en/resources/blog/payments-infrastructure-will-define-performance-in-the-travel-sector", "https://www.getnet.net/en/resources/blog/the-role-payments-play-in-elevating-travel-and-tourism", "https://www.getnet.net/en/resources/blog/travel-and-tourism"]}
+{"id": "Q59", "lang": "es", "query": "¿Cómo preparo mi tienda para el Black Friday y la Navidad?", "relevant": ["https://www.getnet.net/en/resources/blog/retail", "https://www.getnet.net/en/resources/blog/understanding-generational-shopping-preferences"]}
+{"id": "Q60", "lang": "es", "query": "Pago sin contacto del billete en autobuses y trenes", "relevant": ["https://www.getnet.net/en/resources/blog/the-future-of-digital-payments-in-the-public-transport-industry"]}
+{"id": "Q61", "lang": "es", "query": "¿Qué ofrece Getnet a las grandes empresas multinacionales?", "relevant": ["https://www.getnet.net/en/your-business/large-enterprises"]}
+{"id": "Q62", "lang": "es", "query": "¿Cómo protege una cadena hotelera los datos de las tarjetas con cifrado punto a punto?", "relevant": ["https://www.getnet.net/en/resources/client-stories/connects-melia"]}
+{"id": "Q63", "lang": "es", "query": "¿Qué suponen las nuevas normas de pagos para los comercios?", "relevant": ["https://www.getnet.net/en/resources/blog/what-do-new-payment-regulations-mean-for-merchants"]}
+{"id": "Q64", "lang": "es", "query": "¿Cómo está aprovechando México el auge del turismo?", "relevant": ["https://www.getnet.net/en/resources/blog/mexican-travel-industry"]}
+{"id": "Q65", "lang": "es", "query": "¿Qué viene para el ecosistema de pagos de América Latina?", "relevant": ["https://www.getnet.net/en/resources/blog/what-is-next-for-the-latin-america-payments-ecosystem"]}
+{"id": "Q66", "lang": "es", "query": "Panorama de los pagos en España y Portugal en 2025", "relevant": ["https://www.getnet.net/en/resources/blog/the-2025-payments-landscape-in-spain-and-portugal"]}
+{"id": "Q67", "lang": "pt", "query": "Quais terminais de pagamento a Getnet oferece para lojas físicas?", "relevant": ["https://www.getnet.net/en/our-solutions/in-person-payments"]}
+{"id": "Q68", "lang": "pt", "query": "Como assistentes de IA podem fazer compras seguras em nome dos clientes?", "relevant": ["https://www.getnet.net/en/our-solutions/agentic-commerce", "https://www.getnet.net/en/resources/blog/agentic-payments"]}
+{"id": "Q69", "lang": "pt", "query": "Diferença entre criptografia e tokenização dos dados do cartão", "relevant": ["https://www.getnet.net/en/resources/blog/encryption-vs-tokenisation"]}
+{"id": "Q70", "lang": "pt", "query": "Como falar com a equipe comercial da Getnet?", "relevant": ["https://www.getnet.net/en/contact"]}
+{"id": "Q71", "lang": "en", "query": "How long has Getnet been operating in Argentina?", "relevant": ["https://www.getnet.net/en/resources/blog/celebrating-getnet-argentina-fourth-anniversary"]}
+{"id": "Q72", "lang": "en", "query": "How are schools and universities adopting digital payments?", "relevant": ["https://www.getnet.net/en/resources/blog/education-in-the-digital-age-the-adoption-of-digital-payments"]}
+{"id": "Q73", "lang": "en", "query": "Payment trends for beauty salons and health clinics", "relevant": ["https://www.getnet.net/en/resources/blog/health-beauty-payments-in-2026"]}
+{"id": "Q74", "lang": "en", "query": "Which fintech developments shaped 2024?", "relevant": ["https://www.getnet.net/en/resources/blog/the-key-fintech-developments-that-shaped-2024"]}
+{"id": "Q75", "lang": "en", "query": "Why should retailers treat payments as a core strategy?", "relevant": ["https://www.getnet.net/en/resources/blog/why-retailers-must-treat-payments-as-a-core-strategy"]}
 {"id": "N01", "lang": "en", "query": "What is the weather forecast for Madrid tomorrow?", "relevant": []}
 {"id": "N02", "lang": "en", "query": "How do I cook a traditional Valencian paella?", "relevant": []}
 {"id": "N03", "lang": "en", "query": "Who won the 2022 FIFA World Cup final?", "relevant": []}
 {"id": "N04", "lang": "es", "query": "¿Cómo cambio la contraseña de mi cuenta de Netflix?", "relevant": []}
 {"id": "N05", "lang": "en", "query": "What is the capital city of Australia?", "relevant": []}
+{"id": "N06", "lang": "en", "query": "What is today's euro to US dollar exchange rate?", "relevant": []}
+{"id": "N07", "lang": "es", "query": "¿A cuánto cotiza hoy la acción de Banco Santander?", "relevant": []}
+{"id": "N08", "lang": "en", "query": "How do I reset the PIN of my personal debit card?", "relevant": []}
+{"id": "N09", "lang": "es", "query": "¿Qué tiempo hará mañana en Ciudad de México?", "relevant": []}
+{"id": "N10", "lang": "en", "query": "Write a Python function that sorts a list of numbers", "relevant": []}
+{"id": "N11", "lang": "es", "query": "¿Cuántos empleados tiene Getnet y cuál fue su beneficio neto en 2023?", "relevant": []}
+{"id": "N12", "lang": "pt", "query": "Qual é a melhor receita de feijoada?", "relevant": []}
+{"id": "N13", "lang": "es", "query": "¿Cómo solicito una hipoteca para comprarme una casa?", "relevant": []}
+{"id": "N14", "lang": "en", "query": "What is the interchange fee cap for credit cards in the United States?", "relevant": []}
+{"id": "N15", "lang": "en", "query": "What are the opening hours of Getnet's offices?", "relevant": []}
+{"id": "N16", "lang": "es", "query": "Recomiéndame un portátil para jugar a videojuegos", "relevant": []}

@@ -6,8 +6,8 @@ import main
 
 
 def test_el_rag_se_construye_en_el_arranque(client):
-    assert main._vectorstore is not None
-    assert main._vectorstore.index.ntotal == 3
+    assert main._knowledge is not None
+    assert main._knowledge.english.index.ntotal == main._knowledge.multilingual.index.ntotal == 3
 
 
 def test_knowledge_responde_con_la_tool_rag(chat):

@@ -33,7 +33,7 @@ La versión evaluada en V4 está etiquetada como [`v4-evaluated`](https://github
 | Observabilidad básica | `X-Request-ID` en la respuesta y en cada línea de log, usuario seudonimizado, tokens, coste estimado y latencia por turno, y `/health/live` y `/health/ready` | [test_auth.py](tests/test_auth.py), [test_observability.py](tests/test_observability.py) |
 | Dependencias sin versión fija | `requirements.lock` con 104 versiones exactas, que usan Docker y la CI | [requirements.lock](requirements.lock) |
 
-Quedan fuera de esta entrega, por decisión registrada: la colaboración y replanificación entre especialistas, la búsqueda híbrida con umbral de relevancia, el juez LLM y el rate limiting ([DEC-018](specs/decisiones.md#dec-018)).
+La iteración 1 dejó fuera, por decisión registrada, la colaboración y replanificación entre especialistas, la búsqueda híbrida con umbral de relevancia, el juez LLM y el rate limiting ([DEC-018](specs/decisiones.md#dec-018)). La iteración 2 ([specs/iteracion-2/](specs/iteracion-2/)) incorpora la orquestación multi-especialista y la recuperación multilingüe con umbral.
 
 ## Índice
 
@@ -438,10 +438,14 @@ flowchart LR
     S["sitemap de getnet.net<br/>61 páginas /en"] -->|"scripts/ingest.py<br/>WebBaseLoader"| P["55 páginas<br/>solo el contenido de main"]
     P --> J[("data/corpus<br/>snapshot + manifest")]
     J -->|"al arrancar"| C["RecursiveCharacterTextSplitter 800 / 100<br/>500 fragmentos únicos"]
-    C -->|"all-MiniLM-L6-v2"| V["vectores de 384 dimensiones<br/>normalizados"]
-    V --> F[("FAISS IndexFlatL2<br/>en memoria")]
-    Q["consulta del agente"] -->|"embedding + top-4"| F
-    F --> T["fragmentos numerados con su URL<br/>+ sources en la respuesta"]
+    C -->|"all-MiniLM-L6-v2"| F[("FAISS english<br/>IndexFlatL2")]
+    C -->|"paraphrase-multilingual-MiniLM-L12-v2"| M[("FAISS multilingual<br/>IndexFlatL2")]
+    Q["consulta del agente"] --> M
+    M -->|"coseno del mejor < 0.42"| A["abstención:<br/>sin resultados relevantes"]
+    M -->|"top-20"| R["RRF"]
+    Q -->|"solo si está en inglés"| F
+    F -->|"top-20"| R
+    R --> T["top-4 numerados con su URL<br/>+ sources en la respuesta"]
 ```
 
 Las cifras corresponden al snapshot del 13/11/2026.
@@ -466,59 +470,70 @@ Las cifras corresponden al snapshot del 13/11/2026.
 ### 3. Embeddings con HuggingFace
 
 ```python
-HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")                       # el del enunciado
+HuggingFaceEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2",  # iteración 2
+                      encode_kwargs={"normalize_embeddings": True})
 ```
 
-- Es un modelo de `sentence-transformers` de 384 dimensiones y unos 90 MB que se ejecuta en local, en CPU. No tiene coste por petición, no necesita API key y no envía el contenido a terceros.
-- Sus vectores salen normalizados (norma 1), lo que simplifica la búsqueda (ver el punto siguiente).
-- En Docker, el modelo se descarga durante el build y el contenedor arranca con `HF_HUB_OFFLINE=1`, así que no depende de la disponibilidad de Hugging Face.
+- Son modelos de `sentence-transformers` de 384 dimensiones que se ejecutan en local, en CPU. No tienen coste por petición, no necesitan API key y no envían el contenido a terceros.
+- `all-MiniLM-L6-v2` (unos 90 MB) solo entiende inglés: con él, el recall@4 de las consultas en español era de 0.39. El multilingüe (unos 470 MB) es la versión destilada de un MiniLM para más de 50 idiomas: una frase y su traducción caen en vectores cercanos. Se eligió frente a `multilingual-e5-small` con el holdout ([DEC-031](specs/decisiones.md#dec-031)).
+- Los vectores de los dos salen normalizados (norma 1), lo que simplifica la búsqueda (ver el punto siguiente).
+- En Docker, los modelos se descargan durante el build y el contenedor arranca con `HF_HUB_OFFLINE=1`, así que no depende de la disponibilidad de Hugging Face.
 
 ### 4. Almacenamiento en memoria con FAISS
 
-`FAISS.from_documents(chunks, embeddings)` crea dos piezas:
+`KnowledgeBase` guarda los mismos 500 fragmentos en dos índices, `english` y `multilingual`. Cada `FAISS.from_documents(chunks, embeddings)` crea dos piezas:
 
 - Un índice **`IndexFlatL2`**, que hace búsqueda exacta por fuerza bruta. Es la opción correcta con 500 vectores; con millones se usaría un índice aproximado, como IVF o HNSW.
 - Un `InMemoryDocstore`, que asocia cada vector con su `Document`.
 
 Como los vectores están normalizados, ordenar por distancia L2 al cuadrado equivale a ordenar por similitud coseno: d² = 2 − 2·cos(θ). A menor distancia, mayor similitud.
 
-**Cuándo se construye.** Una sola vez, en el `lifespan` de FastAPI, mediante `asyncio.to_thread` para no bloquear el event loop. Uvicorn no acepta conexiones hasta que termina, y por eso el healthcheck de Docker solo pasa a `healthy` cuando el índice está listo.
+**Cuándo se construye.** Una sola vez, en el `lifespan` de FastAPI, mediante `asyncio.to_thread` para no bloquear el event loop. Uvicorn no acepta conexiones hasta que termina, y por eso el healthcheck de Docker solo pasa a `healthy` cuando los índices están listos.
 
 **Degradación controlada.** Si la web no responde, la API arranca igualmente. La herramienta devuelve "La base de conocimiento de Getnet no está disponible en este momento" y el agente se lo comunica al usuario. El guardrail y el soporte siguen funcionando.
 
 ### 5. Recuperación con la herramienta `search_getnet_knowledge`
 
 ```python
-@tool(response_format="content_and_artifact")
-def search_getnet_knowledge(query: str) -> tuple[str, list[str]]:
-    """Busca información oficial en la web de Getnet (...). Escribe la consulta en inglés,
-    porque el contenido indexado está en inglés. Cada fragmento indica la página de la que procede."""
-    docs = _vectorstore.similarity_search(query, k=4)
-    content = "\n\n---\n\n".join(f"[{i}] {title} ({url})\n{text}" ...)  # para el LLM
-    return content, urls  # el artefacto no lo ve el LLM: la API lo devuelve como `sources`
+def search(self, query: str, k: int = 4) -> list[Document]:          # KnowledgeBase
+    hits = self.multilingual.similarity_search_with_score(query, k=RRF_CANDIDATES)
+    if not hits or 1 - hits[0][1] / 2 < RELEVANCE_THRESHOLD:          # coseno del mejor < 0.42
+        return []                                                     # abstención
+    rankings = [[doc for doc, _ in hits]]
+    if is_english(query):                                             # MiniLM solo entiende inglés
+        rankings.append(self.english.similarity_search(query, k=RRF_CANDIDATES))
+    return reciprocal_rank_fusion(rankings)[:k]
 ```
 
-1. El Knowledge Agent (un LLM con `bind_tools`) formula una consulta. El docstring, que el LLM recibe como descripción de la herramienta, le pide escribirla en inglés: la web y el modelo MiniLM están en inglés, aunque el usuario pregunte en español.
-2. La consulta se vectoriza con el mismo modelo y FAISS devuelve los 4 fragmentos más cercanos.
-3. Los fragmentos vuelven al agente numerados y con su URL. El system prompt le pide citarlos (`[1]`), responder solo con esa información, decir cuándo no la encuentra y contestar en el idioma del usuario.
-4. **Procedencia.** `/chat` devuelve en `sources` las URLs que recuperó la herramienta en ese turno. Salen del artefacto de la herramienta y no del texto del LLM, así que el modelo no las puede inventar.
+1. El Knowledge Agent (un LLM con `bind_tools`) formula una consulta. El docstring de la herramienta le sugiere escribirla en inglés, porque el contenido está en inglés y así encuentra más, pero ya no depende de ello.
+2. **Abstención.** Si el fragmento más parecido según el índice multilingüe no llega a un coseno de 0.42, la herramienta devuelve «Sin resultados relevantes» sin fuentes. El agente lo dice y, como no hay fuentes, el supervisor revisa la respuesta.
+3. **Fusión por idioma.** Cada índice aporta sus 20 mejores candidatos y se combinan con *Reciprocal Rank Fusion* (k = 60): cada fragmento suma 1 / (60 + posición) en cada ranking. MiniLM solo vota si la consulta está en inglés; en español o en portugués sus rankings son ruido y bajaban el recall. Un detector mínimo por palabras funcionales (`is_english`) acierta en las 131 consultas de los datasets.
+4. Los 4 primeros fragmentos vuelven al agente numerados y con su URL. El system prompt le pide citarlos (`[1]`), responder solo con esa información, decir cuándo no la encuentra y contestar en el idioma del usuario.
+5. **Procedencia.** `/chat` devuelve en `sources` las URLs que recuperó la herramienta en ese turno. Salen del artefacto de la herramienta y no del texto del LLM, así que el modelo no las puede inventar.
 
 ### Calidad medida
 
-[Evaluación de recuperación](evals/reports/retrieval.md): 42 consultas, cada una con su página fuente, más 5 sin respuesta en el corpus. No usa LLM y se repite en la CI en cada push.
+[Evaluación de recuperación](evals/reports/retrieval.md): 75 consultas con su página fuente (39 en inglés, 32 en español y 4 en portugués) y 16 sin respuesta en el corpus, 5 de ellas sobre temas cercanos, como la cotización de Santander o el horario de las oficinas. No usa LLM, y la CI la repite en cada push con su release gate.
 
-| Métrica | v4 (solo la home) | Actual |
-|---|---:|---:|
-| Fragmentos indexados | 6 | 500 |
-| recall@4 | 0.012 | **0.810** |
-| MRR@10 | 0.024 | **0.748** |
-| nDCG@10 | 0.015 | **0.774** |
-| recall@4, consultas en inglés / en español | 0.015 / 0.000 | 0.912 / 0.375 |
+| Configuración | recall@4 | MRR@10 | recall@4 en / es / pt | Sin respuesta detectadas | Abstenciones falsas |
+|---|---:|---:|---:|---:|---:|
+| v4 (solo la home) | 0.013 | 0.027 | 0.013 / 0.016 / 0.000 | — | — |
+| v5 (MiniLM) | 0.660 | 0.594 | 0.923 / 0.391 / 0.250 | — | — |
+| Solo el índice multilingüe | 0.850 | 0.774 | 0.865 / 0.844 / 0.750 | — | — |
+| RRF de los dos índices, siempre | 0.817 | 0.785 | 0.955 / 0.672 / 0.625 | — | — |
+| Por idioma + BM25 en inglés (ablación) | 0.873 | 0.822 | 0.910 / 0.844 / 0.750 | — | — |
+| **Desplegada: por idioma + umbral** | **0.897** | **0.823** | **0.955 / 0.844 / 0.750** | **11 de 16** | **0 de 75** |
+
+- **Lo que aporta cada pieza.** El índice multilingüe sube el español de 0.39 a 0.84. Fusionarlo con MiniLM en todas las consultas mejora el inglés pero hunde el español, de ahí la fusión por idioma, que se queda con lo mejor de cada configuración.
+- **BM25 se midió y no se despliega.** Con RRF estándar, sumar BM25 en las consultas en inglés baja el recall@4 en inglés de 0.955 a 0.910, y en las demás no puede ayudar, porque el corpus está en inglés ([DEC-031](specs/decisiones.md#dec-031)).
+- **Umbral.** La regla es «el coseno de la consulta con respuesta más baja, menos 0.03», y da 0.42. En validación cruzada estratificada de 5 particiones, fuera de muestra: 0 abstenciones falsas y 11 de 16 consultas sin respuesta detectadas. Las 5 que pasan son las cercanas al dominio, como «¿cuántos empleados tiene Getnet?»: el umbral no las puede separar de las legítimas, y las resuelve el agente al leer los fragmentos.
 
 ### Limitaciones y mejoras del RAG
 
-- **Consultas en español.** El recall baja de 0.91 a 0.38, porque MiniLM es monolingüe. Por eso la herramienta pide al agente la consulta en inglés. El siguiente paso es comparar un modelo multilingüe (`paraphrase-multilingual-MiniLM-L12-v2`) con este mismo holdout; el enunciado fija `all-MiniLM-L6-v2`.
-- **Sin umbral de similitud.** Los datos ya permiten fijarlo: el coseno del primer fragmento tiene una media de 0.61 en las consultas con respuesta, y un máximo de 0.37 en las que no la tienen. Queda para la siguiente iteración (RAG-06), junto con la búsqueda híbrida (BM25 con RRF) y, si la evaluación lo justifica, un reranker.
+- **Portugués.** Solo hay 4 consultas, así que su recall (0.75) es orientativo.
+- **Holdout escrito mirando las páginas.** Puede favorecer la coincidencia de vocabulario, y el umbral se calibró con el mismo holdout; la validación cruzada estima cuánto se generaliza.
+- **Sin reranker.** El recall@4 desplegado es de 0.90 y los fallos que quedan son de páginas genéricas (quiénes somos, grandes empresas). Un cross-encoder solo se añadiría si la evaluación de respuestas mostrara que hacen falta.
 - **Snapshot.** Hay que refrescarlo cuando cambie la web (`python scripts/ingest.py`) y volver a lanzar las evaluaciones.
 
 ## Bonus Challenges implementados
@@ -607,7 +622,7 @@ En producción, los tokens los emitiría un proveedor OIDC y se verificarían co
 | Integración (orquestación) | El grafo completo a través de HTTP: rutas, bucles ReAct, memoria, HITL, `lifespan` y errores | Groq simulado | CI, en cada push y PR |
 | Contrato | La petición que se envía a Groq: modelo, esquema JSON de las herramientas, `tool_choice` forzado y ausencia de `user_id` | Groq simulado | CI, en cada push y PR |
 | Contenedor | Build de la imagen, HEALTHCHECK y respuestas 401, 403 y 422 | Ninguno | CI, en cada push y PR |
-| Recuperación | recall@4, MRR@10 y nDCG@10 del RAG con su release gate | Ninguno | CI, en cada push y PR |
+| Recuperación | recall@4 por idioma, MRR@10, nDCG@10 y abstención del RAG, con su release gate | Ninguno | CI, en cada push y PR |
 | Routing y respuestas | Decisiones del router y respuestas de extremo a extremo con el modelo real | Groq | A mano, al cambiar modelo, prompts o corpus; informes versionados |
 
 ### Cómo se hicieron las pruebas con mocks
@@ -657,7 +672,7 @@ Escenarios cubiertos por [tests/test_chat.py](tests/test_chat.py), que la [CI](h
 
 - **Fixtures** ([tests/conftest.py](tests/conftest.py)):
   - `fake_groq` sustituye `main.llm.async_client` por el servidor falso y guarda cada petición.
-  - `offline_kb` sustituye `main.build_vectorstore` por un índice FAISS con textos fijos y `DeterministicFakeEmbedding`, así que la suite no depende de la red ni de la web de Getnet.
+  - `offline_kb` sustituye `main.build_knowledge_base` por los dos índices FAISS con textos fijos y embeddings deterministas por palabras clave (`KeywordEmbeddings`). Sus similitudes tienen sentido, así que el umbral de relevancia se prueba de verdad, y la suite no depende de la red ni de la web de Getnet.
   - `client` abre `TestClient(main.app)` como context manager para que se ejecute el `lifespan`.
 - **Ejecución local:** `pip install -r requirements.lock -r requirements-dev.txt` y después `pytest`.
 - **CI** ([.github/workflows/ci.yml](.github/workflows/ci.yml)), en cada push a `main` y en cada PR:
@@ -672,7 +687,7 @@ Los mocks no pueden medir si el LLM real decide bien. Para eso están las [evalu
 
 | Suite | Resultado | Informe |
 |---|---|---|
-| Recuperación: 42 consultas, sin LLM | recall@4 0.81 (0.01 con el índice de v4), MRR@10 0.75, nDCG@10 0.77 | [retrieval.md](evals/reports/retrieval.md) |
+| Recuperación: 75 consultas con respuesta y 16 sin ella, sin LLM | recall@4 0.90 (0.66 solo con MiniLM y 0.01 con el índice de v4), 0.84 en español, MRR@10 0.82; 0 abstenciones falsas y 11 de 16 sin respuesta detectadas | [retrieval.md](evals/reports/retrieval.md) |
 | Router: 30 mensajes, 12 de ellos ataques | Accuracy 100 %. Bloquea los 12 ataques (inyecciones, jailbreaks, tóxicos y fraude) y ninguna de las 18 consultas legítimas. p50 de 0,58 s y unos 500 tokens por caso | [routing.md](evals/reports/routing.md) |
 | Respuestas de extremo a extremo: 10 preguntas | Sin errores. Enruta bien y recupera la página correcta en las 10. El dato clave y la cita aparecen en 8: en las otras 2, el agente dice que no encontró el dato, sin inventarlo. p50 de 2,3 s y unos 2 900 tokens por caso | [answers.md](evals/reports/answers.md) |
 
@@ -688,7 +703,7 @@ La evaluación de respuestas se ejecutó tres veces el 13/11. Las dos primeras e
 - **Estado en SQLite.** La memoria y los tickets viven en un archivo SQLite, suficiente para una instancia. Con varias réplicas se usaría `AsyncPostgresSaver` y una tabla de tickets en Postgres ([DEC-019](specs/decisiones.md#dec-019)).
 - **Identidad.** Los JWT de desarrollo se firman con HS256 y un secreto compartido; en producción los emitiría un proveedor OIDC (RS256 con JWKS). No hay límite de peticiones por usuario: queda fuera de esta entrega ([DEC-018](specs/decisiones.md#dec-018)).
 - **Herramientas de soporte simuladas.** Devuelven datos ficticios. En producción llamarían a los sistemas reales con el `user_id` impuesto.
-- **RAG:** consultas en español, umbral de similitud y búsqueda híbrida (ver [Limitaciones y mejoras del RAG](#limitaciones-y-mejoras-del-rag)).
+- **RAG:** pocas consultas en portugués, sin reranker y un snapshot que hay que refrescar (ver [Limitaciones y mejoras del RAG](#limitaciones-y-mejoras-del-rag)).
 - **Subtareas en secuencia.** El supervisor ejecuta las subtareas una tras otra, porque cada una puede depender de lo que encontró la anterior. Las que son independientes se podrían lanzar en paralelo (`Send` de LangGraph) para reducir la latencia.
 - **Versiones fijadas.** `requirements.lock` fija las 104 dependencias para Linux x86_64 y Python 3.11, y Docker y la CI instalan desde él. Se regenera con `scripts/lock_requirements.sh` después de cambiar `requirements.txt`.
 - **`langchain-community` en retirada.** El paquete muestra un aviso de deprecación. Se mantiene porque el enunciado pide `WebBaseLoader`, que vive ahí junto con la integración de FAISS; a medio plazo conviene migrar siguiendo la guía oficial de LangChain.

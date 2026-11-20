@@ -2,11 +2,12 @@
 
 Solo se sustituye la llamada HTTP a Groq (``main.llm.async_client``). langchain-groq (esquemas de tools,
 ``tool_choice`` y parseo de ``tool_calls``), LangGraph, las tools, FastAPI y el lifespan se ejecutan de
-verdad. La base de conocimiento se construye con textos fijos y embeddings deterministas, así que la suite
-no necesita red ni una GROQ_API_KEY real.
+verdad. La base de conocimiento se construye con textos fijos y embeddings deterministas por palabras
+clave, así que la suite no necesita red ni una GROQ_API_KEY real.
 """
 
 import json
+import math
 import os
 import re
 import time
@@ -20,7 +21,7 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from langchain_community.vectorstores import FAISS  # noqa: E402
 from langchain_core.documents import Document  # noqa: E402
-from langchain_core.embeddings import DeterministicFakeEmbedding  # noqa: E402
+from langchain_core.embeddings import Embeddings  # noqa: E402
 
 import main  # noqa: E402
 
@@ -178,10 +179,32 @@ def fake_groq(monkeypatch):
     return fake
 
 
+class KeywordEmbeddings(Embeddings):
+    """Embeddings deterministas con significado: bolsa de palabras normalizada sobre el vocabulario de
+    KB_DOCS. Una consulta sin palabras del corpus cae en una dimensión aparte (coseno 0 con todos los
+    fragmentos), así que el umbral de relevancia se prueba de verdad."""
+
+    def __init__(self):
+        self.vocab = sorted({w for d in KB_DOCS for w in re.findall(r"\w+", d.page_content.lower())})
+
+    def embed_query(self, text):
+        words = re.findall(r"\w+", text.lower())
+        vector = [float(words.count(v)) for v in self.vocab] + [float(not set(words) & set(self.vocab))]
+        norm = math.sqrt(sum(x * x for x in vector))
+        return [x / norm for x in vector]
+
+    def embed_documents(self, texts):
+        return [self.embed_query(t) for t in texts]
+
+
+def offline_knowledge_base(english=None):
+    return main.KnowledgeBase(english=FAISS.from_documents(KB_DOCS, english or KeywordEmbeddings()),
+                              multilingual=FAISS.from_documents(KB_DOCS, KeywordEmbeddings()))
+
+
 @pytest.fixture
 def offline_kb(monkeypatch):
-    monkeypatch.setattr(main, "build_vectorstore",
-                        lambda: FAISS.from_documents(KB_DOCS, DeterministicFakeEmbedding(size=384)))
+    monkeypatch.setattr(main, "build_knowledge_base", offline_knowledge_base)
 
 
 def make_token(sub="user-123", role="merchant", ttl=3600, secret=None, **overrides):
