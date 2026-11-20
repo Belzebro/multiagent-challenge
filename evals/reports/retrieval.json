@@ -1,8 +1,8 @@
 {
   "meta": {
-    "generated_at": "2026-11-20T02:08:56+00:00",
-    "git_commit": "db4fa62",
-    "git_dirty": true,
+    "generated_at": "2026-11-20T02:09:26+00:00",
+    "git_commit": "d6d6ef3",
+    "git_dirty": false,
     "dataset": "evals/datasets/retrieval.jsonl",
     "dataset_sha256": "4b73ccdf16f26121",
     "corpus_sha256": "66234f143b1515f3",

@@ -1,6 +1,6 @@
 # Evaluación de recuperación
 
-`2026-11-20T02:08:56+00:00` · commit `db4fa62` · dataset `4b73ccdf16f26121` · corpus `66234f143b1515f3` · embeddings `all-MiniLM-L6-v2` y `paraphrase-multilingual-MiniLM-L12-v2`
+`2026-11-20T02:09:26+00:00` · commit `d6d6ef3` · dataset `4b73ccdf16f26121` · corpus `66234f143b1515f3` · embeddings `all-MiniLM-L6-v2` y `paraphrase-multilingual-MiniLM-L12-v2`
 
 75 consultas con su página fuente (39 en inglés, 32 en español y 4 en portugués) y 16 sin respuesta en el corpus. Sin LLM; la CI la repite en cada push.
 
