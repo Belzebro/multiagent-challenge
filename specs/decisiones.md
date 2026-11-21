@@ -339,6 +339,7 @@ Estado: **reemplazada por [DEC-033](#dec-033)**: Groq no permitía subir al plan
 - Consecuencias:
   - La persona conoce el análisis de la ronda 1, que funciona como formación en la rúbrica. Queda declarado.
   - Coste: 0.18 USD de juez para los 10 controles nuevos; las respuestas reales ya tenían veredicto.
+- Resultado (20/11/2026, [calibration.md](../evals/reports/calibration.md)): κ de 0.74 en correcta y 0.64 en responde a todo, que pasan a bloquear el gate; útil 0.19, respaldada 0.02 y segura 0.00, que se informan. El juez detecta 9 de los 10 controles; la persona, 4.
 
 ### DEC-035
 

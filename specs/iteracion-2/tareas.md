@@ -46,7 +46,7 @@ Evidencia: [evals/reports/system.md](../../evals/reports/system.md), [system_bas
 - [x] **T-134** Orquestación frente a un solo especialista (`ORCHESTRATION=off`, como v5): cobertura, juez, latencia, tokens y coste. → EVAL2-06
 - [x] **T-135** Gate con los umbrales del sistema y del router de la ejecución final; las dimensiones del juez solo bloquean con κ ≥ 0.6. → EVAL2-03 a EVAL2-06
 - [x] **T-136** Fallos encontrados por las evaluaciones y corregidos con su test: idioma de la síntesis, pasos inventados por Support, herramienta inexistente pedida por gpt-oss, escalado de preguntas públicas, inyección con etiquetas de rol, y comprobación de abstención y bucle del router en el arnés. → EVAL2-05
-- [x] **T-137** Calibración con las 40 etiquetas humanas: κ de 0.84 en «responde a todo», que bloquea el gate; correcta 0.49, respaldada 0.21, útil y segura 0, que se informan. El juez detecta los 10 controles y la persona, 4. → EVAL2-04
+- [x] **T-137** Ronda 1 de calibración (piloto) con las 40 etiquetas humanas: κ de 0.84 en «responde a todo», que bloqueaba el gate hasta la ronda 2; correcta 0.49, respaldada 0.21, útil y segura 0, que se informan. El juez detecta los 10 controles y la persona, 4. → EVAL2-04
 - [x] **T-138** Fallo encontrado por el etiquetado humano: el formato de cita interno de gpt-oss (`【1†L1-L7】`) salía en 120 de 186 respuestas. La API, el historial y los runners lo normalizan a `[1]`, con test; aplicado a las respuestas grabadas, no cambia ninguna comprobación. → EVAL2-05
 
 ## F14: observabilidad (B)
@@ -75,7 +75,7 @@ Evidencia: [DEC-034](../decisiones.md#dec-034), [DEC-035](../decisiones.md#dec-0
 - [x] **T-170** Ronda 2 de calibración, registrada antes de etiquetar: 40 respuestas de la ejecución final, la página con el comercio visible y una guía de la rúbrica, y controles con textos nuevos. La ronda 1 queda como piloto. → EVAL2-04
 - [x] **T-171** Síntesis verificada: frases con cita y descarte determinista de cifras, contactos, URLs e identificadores que no están en las pruebas, con revisión y nota cuando se quita algo; portugués explícito en la síntesis. → ORQ2, EVAL2-05
 - [x] **T-172** Mixtas con la síntesis verificada (15 × 3) y sección `mixed` en el gate de la CI. → EVAL2-03
-- [ ] **T-173** Calibración de la ronda 2 (κ por dimensión), README y tag.
+- [x] **T-173** Calibración de la ronda 2: κ de 0.74 en correcta y 0.64 en responde a todo, que bloquean el gate. README y tag `v6.1-reevaluacion` con la CI de `main` en verde.
 
 ## F16: cierre (A)
 
