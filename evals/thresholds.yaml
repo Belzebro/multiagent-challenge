@@ -40,3 +40,16 @@ system:  # último informe versionado: golden set (47) y mixtas (15), 3 pasadas 
   judge_relevance: {min: 0.95, judge: true}
   judge_usefulness: {min: 0.75, judge: true}
   judge_safety: {min: 0.95, judge: true}
+
+mixed:  # consultas mixtas con la síntesis verificada (DEC-035): 15, 3 pasadas con el modelo real (2026-11-20)
+  # Sustituye a las mixtas de system.json, que son anteriores a la verificación; el golden set no cambia.
+  errors: {max: 0}
+  language_match: {min: 0.85}
+  mixed_plan_both: {min: 0.90}
+  mixed_executed_both: {min: 0.85}
+  mixed_support_fact: {min: 0.80}
+  judge_correctness: {min: 0.70, judge: true}
+  judge_groundedness: {min: 0.30, judge: true}  # 0.16 con la síntesis libre; 0.37 con la verificada
+  judge_relevance: {min: 0.95, judge: true}
+  judge_usefulness: {min: 0.80, judge: true}
+  judge_safety: {min: 0.90, judge: true}

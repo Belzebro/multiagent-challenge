@@ -168,6 +168,7 @@ class State(TypedDict):
     step_start: int  # índice del primer mensaje de la subtarea en curso
     review: str  # correcciones que pidió el crítico ("" si no pidió ninguna)
     critic: str  # "approved" | "approved_after_revision" | "delivered_with_issues" | "unreviewed" | ""
+    dropped_claims: list[str]  # frases de la síntesis descartadas por no estar en las pruebas
     # Memoria de conversaciones largas: resumen de los mensajes [0, summarized), que los agentes ya no ven.
     summary: str
     summarized: int
@@ -243,7 +244,7 @@ async def router_agent(state: State) -> dict:
     if ROLE_TAGS.search(last.text):
         logger.info("Router -> guardrail (etiquetas de rol en el mensaje, sin llamar al LLM)")
         return {"next_node": "guardrail", "route": "guardrail", "plan": [], "findings": [], "hops": 0,
-                "step_start": len(state["messages"]), "review": "", "critic": ""}
+                "step_start": len(state["messages"]), "review": "", "critic": "", "dropped_claims": []}
     prompt = [SystemMessage(content=ROUTER_PROMPT)]
     previous = next((m for m in reversed(history) if isinstance(m, AIMessage) and m.text), None)
     if previous is not None:  # da sentido a respuestas cortas de seguimiento, como "es el Smart"
@@ -253,6 +254,7 @@ async def router_agent(state: State) -> dict:
     result, memory = await asyncio.gather(router_llm.ainvoke([*prompt, last]), summarize_if_needed(state))
     decision: RouteDecision | None = result["parsed"]
     turn = {"findings": [], "hops": 0, "step_start": len(state["messages"]), "review": "", "critic": "",
+            "dropped_claims": [],
             **memory}
     if decision is None:
         # Fail-closed: si el clasificador no da una decisión válida, el mensaje no pasa.
@@ -343,6 +345,21 @@ def is_english(text: str) -> bool:
     words = re.findall(r"\w+", folded)
     other = sum(w in _OTHER_WORDS for w in words) + 2 * bool(_NON_ENGLISH_CHARS.search(lowered))
     return sum(w in _ENGLISH_WORDS for w in words) >= other
+
+
+PT_WORDS = frozenset("não você vocês são também pelo pela às isso esse essa é uma com em dos das nos nas "
+                     "ao aos seu sua muito foi".split())
+ES_WORDS = frozenset("el los del también pero muy está son una con en las según usted puede hay es fue "
+                     "su".split())
+LANGUAGE_NAMES = {"en": "inglés", "pt": "portugués", "es": "español"}
+
+
+def text_language(text: str) -> str:
+    """"en", "pt" o "es", sin LLM: el detector de inglés de la recuperación y palabras frecuentes."""
+    if is_english(text):
+        return "en"
+    words = re.findall(r"\w+", text.lower())
+    return "pt" if sum(w in PT_WORDS for w in words) > sum(w in ES_WORDS for w in words) else "es"
 
 
 def reciprocal_rank_fusion(rankings: list[list[Document]]) -> list[Document]:
@@ -761,30 +778,152 @@ def render_skipped(state: State) -> str:
     return f"\n\nSubtareas que no se pudieron hacer (dilo; no las respondas por tu cuenta):\n{lines}"
 
 
-SYNTHESIZER_PROMPT = """Redactas la respuesta final del asistente de Getnet a partir de lo que han
+SYNTHESIZER_PROMPT = """Redactas la respuesta final del asistente de Getnet, frase a frase, a partir de lo
+que han encontrado los especialistas y de las pruebas que devolvieron sus herramientas.
+- Integra todas las partes de la pregunta en una respuesta clara y breve, en el idioma indicado.
+- Cada frase que dé un dato (estado, cifra, plazo, paso, producto, condición, causa o contacto) es de
+  tipo `dato` y lleva en `quote` el fragmento de las PRUEBAS que la respalda, copiado literalmente en el
+  idioma de las pruebas, sin traducirlo aunque la respuesta vaya en otro idioma. Si no encuentras ese
+  fragmento en las pruebas, no escribas la frase: di con una frase `sin_dato` que no tienes ese dato.
+- Responde a todas las partes de la pregunta. Si para una parte no hay datos en las pruebas, dilo con una
+  frase `sin_dato`; no la omitas.
+- Las frases sin datos van sin `quote`: `enlace` para una introducción, una transición o el título de una
+  lista; `sin_dato` para decir que algo no se pudo resolver o sugerir contactar con Getnet.
+- No añadas pasos, rutas de menú, umbrales, tiempos ni conocimiento general (causas habituales,
+  recomendaciones genéricas) que no estén en las pruebas.
+- En una lista, empieza cada punto con "- ". Conserva en el texto las citas de las fuentes oficiales
+  ([1], [2]...) y no inventes enlaces."""
+# Si el modelo no devuelve la estructura, se redacta sin verificar, como antes de la verificación.
+SYNTHESIZER_FALLBACK_PROMPT = """Redactas la respuesta final del asistente de Getnet a partir de lo que han
 encontrado los especialistas.
 - Integra todas las partes en una sola respuesta clara y breve, en el idioma del cliente.
-- Usa solo la información de los hallazgos; no añadas datos. No añadas pasos, rutas de menú, umbrales,
-  tiempos ni conocimiento general (causas habituales, recomendaciones genéricas) que no estén en los
-  hallazgos: un paso solo vale si se deduce de lo encontrado.
+- Usa solo la información de los hallazgos; no añadas pasos, rutas de menú, umbrales, tiempos ni
+  conocimiento general (causas habituales, recomendaciones genéricas) que no estén en los hallazgos.
 - Conserva las citas de las fuentes oficiales ([1], [2]...) y no inventes enlaces.
 - Si alguna parte no se pudo resolver, dilo y propone el siguiente paso."""
+NO_VERIFIED_ANSWER = {
+    "es": "No he podido confirmar la respuesta con los datos disponibles. Puedes contactar con Getnet para "
+          "revisarlo.",
+    "en": "I couldn't confirm the answer with the available data. You can contact Getnet to review it.",
+    "pt": "Não consegui confirmar a resposta com os dados disponíveis. Você pode entrar em contato com a "
+          "Getnet para revisar.",
+}
+# Si la verificación quitó frases y la respuesta no dice qué falta, se dice aquí: en la evaluación con el
+# modelo real, la parte quitada desaparecía sin aviso y la respuesta dejaba de atender toda la pregunta.
+OMITTED_NOTE = {
+    "es": "No incluyo parte de lo que pedías porque no aparece en los datos disponibles; puedes consultarlo "
+          "con Getnet.",
+    "en": "I haven't included part of what you asked because it isn't in the available data; you can check "
+          "it with Getnet.",
+    "pt": "Não incluo parte do que você pediu porque não aparece nos dados disponíveis; você pode consultar "
+          "a Getnet.",
+}
+
+
+class Claim(BaseModel):
+    """Una frase de la respuesta final."""
+
+    kind: Literal["dato", "enlace", "sin_dato"] = Field(
+        description="dato: da información concreta y lleva quote. enlace: introducción, transición o título, "
+                    "sin datos. sin_dato: dice que algo no se pudo resolver o sugiere contactar con Getnet.")
+    text: str = Field(description="La frase tal como irá en la respuesta, en el idioma indicado.")
+    quote: str = Field(default="", description="Solo en dato: el fragmento de las pruebas que la respalda, "
+                                               "copiado literalmente y en su idioma original.")
+
+
+class Synthesis(BaseModel):
+    """Respuesta final frase a frase, para comprobar cada dato contra las pruebas antes de enviarla."""
+
+    claims: list[Claim]
+
+
+synthesis_llm = llm.with_structured_output(Synthesis, method="function_calling", include_raw=True)
+# URLs, correos y cifras (también las de los identificadores): lo que el modelo inventa con más facilidad.
+FIGURE = re.compile(r"https?://[^\s)\]>]+|www\.[^\s)\]>]+|[\w.+-]+@[\w-]+(?:\.[\w-]+)+|\d+(?:[.,:]\d+)*")
+SOURCE_REF = re.compile(r"\[\d+\]|【[^】]*】")  # citas de las fuentes: no son datos
+LIST_ITEM = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+")
+
+
+def normalized(text: str) -> str:
+    """Minúsculas, sin tildes ni puntuación: compara textos sin depender del formato."""
+    text = "".join(c for c in unicodedata.normalize("NFKD", text.lower()) if not unicodedata.combining(c))
+    return " ".join(re.findall(r"[a-z0-9]+", text))
+
+
+def unsupported_figures(text: str, evidence: str) -> list[str]:
+    """Cifras, correos e identificadores de la frase que no aparecen en las pruebas (ya normalizadas)."""
+    padded = f" {evidence} "
+    return [m.group() for m in FIGURE.finditer(SOURCE_REF.sub(" ", text))
+            if f" {normalized(m.group())} " not in padded]
+
+
+def verify_claims(claims: list[Claim], evidence_text: str) -> tuple[list[Claim], list[Claim]]:
+    """Descarta, sin LLM, las frases con una URL, un correo, una cifra o un identificador que no están en las
+    pruebas. No exige que la cita aparezca literal: con el modelo real, gpt-oss traducía o parafraseaba las
+    citas, y exigirlas descartaba datos correctos y dejaba partes de la pregunta sin responder."""
+    evidence = normalized(evidence_text)
+    kept, dropped = [], []
+    for claim in claims:
+        (dropped if unsupported_figures(claim.text, evidence) else kept).append(claim)
+    return kept, dropped
+
+
+def render_claims(claims: list[Claim]) -> str:
+    """Une las frases: los puntos de una lista en líneas seguidas y el resto en párrafos."""
+    blocks: list[str] = []
+    for claim in claims:
+        text = claim.text.strip()
+        if not text:
+            continue
+        tail = blocks[-1].splitlines()[-1] if blocks else ""
+        title = tail.startswith("**") and tail.endswith("**")
+        if LIST_ITEM.match(text) and LIST_ITEM.match(tail):
+            blocks[-1] += f"\n{text}"
+        elif tail and not LIST_ITEM.match(text) and not LIST_ITEM.match(tail) and not tail.endswith(":") \
+                and not title and not text.startswith("**"):
+            blocks[-1] += f" {text}"
+        else:
+            blocks.append(text)
+    return "\n\n".join(blocks)
+
+
+def turn_tool_text(state: State) -> str:
+    """Todo lo que devolvieron las herramientas en el turno, sin recortar: contra esto se verifica."""
+    messages = state["messages"]
+    return "\n".join(m.text for m in messages[last_human_index(messages) + 1:] if isinstance(m, ToolMessage))
 
 
 async def synthesizer_node(state: State) -> dict:
-    """Integra los hallazgos de los especialistas en una sola respuesta."""
+    """Integra los hallazgos de los especialistas en una sola respuesta, frase a frase, y descarta sin LLM
+    las frases que no respaldan las pruebas. En la evaluación con el modelo real, la síntesis libre añadía
+    conocimiento general que el crítico casi nunca detectaba (respaldo de 0.16 en las consultas mixtas)."""
     messages = state["messages"]
     question = messages[last_human_index(messages)]
-    note = f"Hallazgos de los especialistas:\n{render_findings(state['findings'])}{render_skipped(state)}"
+    note = (f"Hallazgos de los especialistas:\n{render_findings(state['findings'])}{render_skipped(state)}"
+            f"\n\nPruebas:\n{turn_evidence(state)}")
     if state.get("review"):
         note += f"\n\nEl revisor pidió corregir: {state['review']}"
     # Los datos de Support llegan en español: sin esta nota, el modelo respondía en español a preguntas en
     # inglés. El idioma se decide sin LLM, con el mismo detector que la recuperación.
-    language = "inglés" if is_english(question.text) else "el idioma de la pregunta (español o portugués)"
-    note += f"\n\nEscribe la respuesta en {language}, aunque los hallazgos estén en otro idioma."
-    response = await llm.ainvoke([SystemMessage(content=SYNTHESIZER_PROMPT), SystemMessage(content=note),
-                                  question])
-    return {"messages": [response]}
+    lang = text_language(question.text)
+    note += f"\n\nEscribe la respuesta en {LANGUAGE_NAMES[lang]}, aunque los hallazgos estén en otro idioma."
+    result = await synthesis_llm.ainvoke([SystemMessage(content=SYNTHESIZER_PROMPT),
+                                          SystemMessage(content=note), question])
+    synthesis: Synthesis | None = result["parsed"]
+    if synthesis is None or not synthesis.claims:
+        logger.warning("Síntesis sin estructura válida (%s): se redacta sin verificar.",
+                       result["parsing_error"])
+        response = await llm.ainvoke([SystemMessage(content=SYNTHESIZER_FALLBACK_PROMPT),
+                                      SystemMessage(content=note), question])
+        return {"messages": [response], "dropped_claims": []}
+    kept, dropped = verify_claims(synthesis.claims, turn_tool_text(state))
+    if dropped:
+        logger.info("Síntesis: %d de %d frases descartadas por no estar en las pruebas",
+                    len(dropped), len(synthesis.claims))
+        if kept and not any(c.kind == "sin_dato" for c in kept):
+            kept.append(Claim(kind="sin_dato", text=OMITTED_NOTE[lang]))
+    answer = render_claims(kept) or NO_VERIFIED_ANSWER[lang]
+    return {"messages": [AIMessage(content=answer)], "dropped_claims": [c.text for c in dropped]}
 
 
 class CriticVerdict(BaseModel):
@@ -833,6 +972,9 @@ def turn_evidence(state: State) -> str:
 CITATION = re.compile(r"[\[【]\d+[\]】†]")  # [1], 【1】 o 【1†L1-L7】 (formato de cita de gpt-oss)
 UNSOURCED_CITATIONS = ("La respuesta cita fuentes, pero en este turno no se recuperó ninguna: "
                        "quita las citas y lo que dependa de ellas.")
+DROPPED_CLAIMS_REVIEW = ("Se quitaron frases con datos (cifras, contactos, URLs o identificadores) que "
+                         "no están en las pruebas: {claims}. Reescribe esas partes solo con datos de las "
+                         "pruebas, o di que no tienes ese dato.")
 MODEL_CITATION = re.compile(r"【(\d+)(?:†[^】]*)?】")
 MODEL_LABEL = re.compile(r"【([^】†]*)(?:†[^】]*)?】")
 
@@ -851,6 +993,11 @@ async def critic_node(state: State) -> dict:
     # Comprobación determinista antes del LLM: una cita sin ninguna fuente recuperada es inventada.
     if CITATION.search(draft) and not any(f["sources"] for f in state["findings"]):
         verdict: CriticVerdict | None = CriticVerdict(verdict="revise", issues=UNSOURCED_CITATIONS)
+    elif state.get("dropped_claims") and not review:
+        # La verificación quitó frases: una parte puede haber quedado sin responder. Se reescribe una vez,
+        # también verificada, antes de que el crítico LLM revise.
+        claims = "; ".join(f"«{c[:160]}»" for c in state["dropped_claims"][:6])
+        verdict = CriticVerdict(verdict="revise", issues=DROPPED_CLAIMS_REVIEW.format(claims=claims))
     else:
         context = (f"Hallazgos:\n{render_findings(state['findings'])}{render_skipped(state)}\n\n"
                    f"Pruebas:\n{turn_evidence(state)}\n\nRespuesta propuesta:\n{draft}")

@@ -4,6 +4,7 @@ planificar → delegar entre especialistas → observar → replanificar → sin
 y humano o agente cuando hace falta.
 """
 
+import pytest
 from langchain_core.messages import HumanMessage, ToolMessage
 
 import main
@@ -14,8 +15,7 @@ def calls_with_tool(fake, name):
 
 
 def synthesizer_calls(fake):
-    return [r for r in fake.requests if not r.get("tools")
-            and any(main.SYNTHESIZER_PROMPT in (m.get("content") or "") for m in r["messages"])]
+    return calls_with_tool(fake, "Synthesis")  # la síntesis devuelve las frases con su cita
 
 
 def resolve(client, auth, ticket_id, decision, reply=""):
@@ -213,3 +213,72 @@ def test_el_router_sigue_conectado_con_next_node_a_tres_destinos():
     assert destinos == {"guardrail", "knowledge", "support"}
     supervisor = {e.target for e in main.graph.get_graph().edges if e.source == "supervisor"}
     assert supervisor == {"knowledge", "support", "synthesizer", "escalation", "__end__"}
+
+
+def test_la_sintesis_descarta_lo_que_no_respaldan_las_pruebas(chat, fake_groq):
+    """Con el modelo real, la síntesis libre añadía conocimiento general: respaldo de 0.16 en las mixtas."""
+    body = chat("Mi terminal no conecta y quiero la guía del Wi-Fi verifica").json()
+    assert body["status"] == "completed"
+    # Se quitan la cifra y el correo inventados; una frase sin cifras pasa aunque su cita no esté
+    # (limitación documentada).
+    assert body["response"] == ("SINTESIS_REVISADA<<support+knowledge>>\n\n"
+                                f"- DATO_RESPALDADO\n- DATO_SIN_CIFRAS\n\n{main.OMITTED_NOTE['es']}")
+    # Lo quitado provoca una revisión determinista que dice qué se quitó, sin llamar al crítico LLM.
+    assert body["critic"] == "approved_after_revision"
+    assert len(calls_with_tool(fake_groq, "CriticVerdict")) == 1
+    note = next(m["content"] for m in synthesizer_calls(fake_groq)[1]["messages"]
+                if "El revisor pidió corregir" in (m.get("content") or ""))
+    assert "987654" in note and "soporte.inventado@getnet.example" in note
+
+
+def test_sin_estructura_la_sintesis_se_redacta_sin_verificar(chat):
+    body = chat("Mi terminal no conecta y quiero la guía del Wi-Fi sinestructura").json()
+    assert body["response"] == "SINTESIS_SIN_VERIFICAR"
+
+
+def test_verify_claims_descarta_cifras_correos_y_urls_que_no_estan_en_las_pruebas():
+    evidence = ("Terminal POS-4471: offline desde hace 47 minutos (error E-102).\n"
+                "Contacto de Getnet México: info@getnet.mx")
+    claim = main.Claim
+    claims = [
+        claim(kind="enlace", text="Esto es lo que he encontrado:"),
+        claim(kind="dato", text="Tu terminal POS-4471 está offline desde hace 47 minutos.",
+              quote="offline desde hace 47 minutos"),
+        claim(kind="dato", text="Lleva 2 horas sin conexión.", quote="offline desde hace 47 minutos"),
+        claim(kind="dato", text="Suele deberse a fondos insuficientes.",
+              quote="rechazos por fondos insuficientes"),
+        claim(kind="dato", text="Escribe a info@getnet.mx.",
+              quote="Contacto de Getnet México: info@getnet.mx"),
+        claim(kind="sin_dato", text="Escribe a soporte@getnet.com."),
+        claim(kind="dato", text="O terminal está sem conexão há 47 minutos.",
+              quote="sem conexão há 47 minutos"),
+        claim(kind="dato", text="Abre un ticket en https://soporte.getnet.example/mx.", quote="error E-102"),
+        claim(kind="enlace", text="Te recomiendo reiniciar el router y revisar el filtrado MAC de la red."),
+    ]
+    kept, dropped = main.verify_claims(claims, evidence)
+    # Se descartan la cifra, el correo y la URL inventados. Las invenciones sin cifras (3: una causa; 8: un
+    # paso genérico) pasan: es la limitación documentada, que solo el juez independiente detecta.
+    assert dropped == [claims[2], claims[5], claims[7]]
+    assert kept == [claims[0], claims[1], claims[3], claims[4], claims[6], claims[8]]
+
+
+def test_render_claims_une_parrafos_y_listas():
+    claim = main.Claim
+    claims = [claim(kind="enlace", text="Tu terminal:"),
+              claim(kind="dato", text="- Está offline.", quote="x"),
+              claim(kind="dato", text="- Tiene el error E-102.", quote="x"),
+              claim(kind="dato", text="Además, hay una actualización.", quote="x"),
+              claim(kind="dato", text="Instálala cuando vuelva la conexión.", quote="x")]
+    assert main.render_claims(claims) == ("Tu terminal:\n\n- Está offline.\n- Tiene el error E-102."
+                                          "\n\nAdemás, hay una actualización. "
+                                          "Instálala cuando vuelva la conexión.")
+
+
+@pytest.mark.parametrize("text, lang", [
+    ("My terminal is offline, how do I set up the Wi-Fi?", "en"),
+    ("Meu terminal não conecta. Qual é a duração da bateria?", "pt"),
+    ("Mi terminal no conecta. ¿Cuánto dura la batería?", "es"),
+])
+def test_el_idioma_de_la_sintesis_distingue_el_portugues(text, lang):
+    """Con el modelo real, preguntas en portugués recibían la síntesis en español."""
+    assert main.text_language(text) == lang

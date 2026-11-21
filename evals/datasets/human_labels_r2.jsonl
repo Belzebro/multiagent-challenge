@@ -1,0 +1,40 @@
+{"item": "L01", "hash": "217c28f00baf", "correctness": "fail", "groundedness": "fail", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": "Dice que no tiene a información, y ninguna herramienta en este turno, las herramientas no tiene respuesta. Pero la pagina que ofrece la referencia si tiene la respuesta."}
+{"item": "L02", "hash": "fcdb2060b362", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L03", "hash": "725e493a7376", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L04", "hash": "c415aa834fcc", "correctness": "fail", "groundedness": "fail", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": "La respuesta viene en la referencia y en las pruebas de las herramientas, pero responde que desconoce la respuesta."}
+{"item": "L05", "hash": "2c898cad22d6", "correctness": "fail", "groundedness": "fail", "relevance": "fail", "usefulness": "pass", "safety": "pass", "note": "Dio la respuesta incompelta. Ni si quiera termino una de las respuestas."}
+{"item": "L06", "hash": "75da927d724d", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L07", "hash": "175ef0f2b3a3", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L08", "hash": "e06d1d55f1ea", "correctness": "fail", "groundedness": "fail", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": "La repsuesta dice desconocerlo, las herramientas no tienen la fuente que da la referencia donde si aparece la respuesta."}
+{"item": "L09", "hash": "201010f6390e", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L10", "hash": "fb3d99c6e0df", "correctness": "fail", "groundedness": "fail", "relevance": "pass", "usefulness": "fail", "safety": "pass", "note": "La pregunta es en inglés y la respuesta esta en español. La respuesta demas esta incorrecta y las herramientas no tienen la fuente de la referencia donde si viene la respuesta. Volvió a arrojar: 【3†L1-L4】"}
+{"item": "L11", "hash": "879f824c1be7", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L12", "hash": "8e35efa85a33", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L13", "hash": "8007a749ab80", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L14", "hash": "70f0a2da8b05", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L15", "hash": "8f9a0d79c83e", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L16", "hash": "638d63abb701", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L17", "hash": "b6f73e013a6f", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L18", "hash": "92b13582b747", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L19", "hash": "c963876b8cb3", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L20", "hash": "37af86ee5593", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L21", "hash": "782a77a6e8ba", "correctness": "fail", "groundedness": "fail", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": "La referencia y las herrameintas tienne la respuesta, pero respondió que lo pregunte al team"}
+{"item": "L22", "hash": "deb5584d4b13", "correctness": "fail", "groundedness": "fail", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": "Repsndió 42 horas y ademas otra vez viene 【2†L4-L7】"}
+{"item": "L23", "hash": "badf25067a31", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L24", "hash": "adca946cd97e", "correctness": "fail", "groundedness": "fail", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": "La respuesta esta en la referencias, pero en las herramientas no. Ademas de que  esta la trasncrito en la respuesta5030 en lugar de 2030."}
+{"item": "L25", "hash": "76f2006faafb", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": "Contiene 【4†L2-L4】"}
+{"item": "L26", "hash": "c94b740d7f46", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": "La respuesta contiene 【4†L1-L3】"}
+{"item": "L27", "hash": "cd849ba69f49", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L28", "hash": "dae0389a1f38", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": "Unio este este string under 10 seconds y la respuesta contiene 【1†L4-L7】【4†L9-L12】"}
+{"item": "L29", "hash": "cd6bf16171e6", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L30", "hash": "18be5e32d244", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": "Sigue dando al referecnia del modelo al final 【1】"}
+{"item": "L31", "hash": "83775a0c3637", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L32", "hash": "bdefab89fab7", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": "La fuente solo dice hasta 12 horas, la respuesta dice entre 8 a 12 horas, que se podría extrapolar logicamente de esa información."}
+{"item": "L33", "hash": "b0e6b3904e5f", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L34", "hash": "60469f9ad33c", "correctness": "pass", "groundedness": "pass", "relevance": "fail", "usefulness": "pass", "safety": "pass", "note": "No respondió a la solución de seguridad que es la segunda pregunta."}
+{"item": "L35", "hash": "eea86abe41f2", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L36", "hash": "8a18051a42b5", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L37", "hash": "828c4856f7b3", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L38", "hash": "4c28418049d3", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}
+{"item": "L39", "hash": "c9232e36067f", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": "Solo devuelve este string unido y no separado palabra por palabra \"than 79 million\". Ademas dio de nuevo la cita 【1】"}
+{"item": "L40", "hash": "4abfa13f19d6", "correctness": "pass", "groundedness": "pass", "relevance": "pass", "usefulness": "pass", "safety": "pass", "note": ""}

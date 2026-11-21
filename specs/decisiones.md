@@ -37,6 +37,8 @@ Registro *append-only*: una decisión no se borra; si cambia, se añade otra que
 | [DEC-031](#dec-031) | 2026-11-19 | Recuperación por idioma con un MiniLM multilingüe, umbral 0.42 y sin BM25 | Aceptada | Técnica |
 | [DEC-032](#dec-032) | 2026-11-19 | Estado en Postgres opcional, límite de uso en la base compartida, OIDC con JWKS y resumen de memoria | Aceptada | Técnica |
 | [DEC-033](#dec-033) | 2026-11-20 | Evaluaciones con el mismo modelo vía OpenRouter y juez Claude Opus 5.5 | Aceptada | Usuario y técnica |
+| [DEC-034](#dec-034) | 2026-11-20 | Segunda ronda de calibración con el instrumento corregido; decide el gate | Aceptada | Usuario y técnica |
+| [DEC-035](#dec-035) | 2026-11-20 | Síntesis verificada: se descartan cifras, contactos, URLs e identificadores que no están en las pruebas | Aceptada | Técnica, aprobada |
 
 ---
 
@@ -320,3 +322,42 @@ Estado: **reemplazada por [DEC-033](#dec-033)**: Groq no permitía subir al plan
 - Consecuencias:
   - Coste estimado: menos de 2 USD de OpenRouter y unos 11–13 USD de juez.
   - El juez es Opus en lugar de Sonnet, por decisión del usuario, para tener el mejor acuerdo posible con las etiquetas humanas.
+
+### DEC-034
+
+**Segunda ronda de calibración con el instrumento corregido. Es la ronda que decide qué dimensiones del juez bloquean el gate.**
+
+- Contexto: en la ronda 1 (40 respuestas), solo «responde a todo» llegó a κ ≥ 0.6, y la persona detectó 4 de los 10 controles. Al revisar la página aparecieron dos fallos del instrumento. No mostraba qué comercio pregunta, así que no se podían reconocer los datos de un tercero. Tampoco tenía una guía con ejemplos de la rúbrica.
+- Decisión, registrada antes de etiquetar la ronda 2:
+  - 40 respuestas nuevas de la ejecución final ([system.json](../evals/reports/system.json)), a ciegas: 30 reales, empezando por las preguntas que no salieron en la ronda 1, y 10 controles con textos nuevos.
+  - La página muestra el comercio que pregunta y una guía sacada de la rúbrica v1, que no cambia. Los ejemplos de la guía son inventados: no salen de las respuestas ni de los veredictos del juez.
+  - La ronda 2 decide qué dimensiones bloquean el gate, con el mismo umbral (κ ≥ 0.6), tanto si el κ sube respecto a la ronda 1 como si baja. La ronda 1 se publica como piloto ([calibration_r1.md](../evals/reports/calibration_r1.md)).
+- Alternativas descartadas:
+  - Volver a etiquetar las mismas 40 respuestas: la persona ya conoce los desacuerdos y los veredictos del juez.
+  - Cambiar de métrica después de ver el resultado, por ejemplo al AC1 de Gwet.
+  - Adjudicar los desacuerdos viendo las razones del juez, porque sesga las etiquetas hacia él.
+- Consecuencias:
+  - La persona conoce el análisis de la ronda 1, que funciona como formación en la rúbrica. Queda declarado.
+  - Coste: 0.18 USD de juez para los 10 controles nuevos; las respuestas reales ya tenían veredicto.
+- Resultado (20/11/2026, [calibration.md](../evals/reports/calibration.md)): κ de 0.74 en correcta y 0.64 en responde a todo, que pasan a bloquear el gate; útil 0.19, respaldada 0.02 y segura 0.00, que se informan. El juez detecta 9 de los 10 controles; la persona, 4.
+
+### DEC-035
+
+**La síntesis se verifica sin LLM: se descartan las frases con cifras, contactos, URLs o identificadores que no están en las pruebas.**
+
+- Contexto: con el modelo real, el respaldo de las consultas mixtas era de 0.16. `gpt-oss` añadía conocimiento general, y el crítico, que es el mismo modelo, revisó solo 6 de 43 síntesis.
+- Decisión:
+  - El sintetizador devuelve la respuesta frase a frase. Cada frase con datos lleva la cita de las pruebas que la respalda.
+  - Una verificación determinista descarta las frases con una URL, un correo, una cifra o un identificador que no aparecen en lo que devolvieron las herramientas del turno.
+  - Si descarta algo, el crítico pide una revisión sin llamar al LLM, con la lista de lo quitado, y la segunda versión también se verifica. Si la respuesta no dice que falta un dato, se añade una nota en el idioma de la pregunta.
+  - Si el modelo no devuelve la estructura, se redacta como antes, sin verificar.
+- Alternativas descartadas:
+  - Exigir que la cita aparezca literal en las pruebas. En la prueba con el modelo real, `gpt-oss` traducía o parafraseaba las citas, y se perdían datos correctos y partes enteras: en 5 consultas, la corrección bajó a 0.40 y la utilidad a 0.20.
+  - Un crítico de otra familia de modelos: más coste y latencia. Queda como siguiente paso.
+- Consecuencias, en 15 consultas mixtas × 3 pasadas ([system_mixed.md](../evals/reports/system_mixed.md)):
+  - Mejoran el respaldo (de 0.16 a 0.37), la utilidad (de 0.86 a 0.91) y la seguridad (de 0.90 a 0.95). La corrección (0.77) y «responde a todo» (0.98) no cambian.
+  - Empeoran el dato de Knowledge, de 0.76 a 0.57, porque se descarta la frase entera aunque solo una cifra sea inventada, y la latencia p50, de 11,6 a 13,9 s.
+  - No detecta las invenciones sin cifras, como una causa habitual o un paso genérico: esas solo las ve el juez.
+  - La primera versión dejaba partes sin responder («responde a todo» de 0.90, [system_mixed_run1.md](../evals/reports/system_mixed_run1.md)). Se corrigió con la nota y con un prompt que pide decir qué falta.
+  - El golden set no cambia, porque usa la vía rápida, sin síntesis.
+
